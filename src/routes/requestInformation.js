@@ -1,11 +1,13 @@
 import { Router } from "express";
+import { sendRequestInformationEmail } from "../services/requestInformationEmail.js";
 
 const router = Router();
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const phoneCharacterPattern = /^\+?[0-9\s().-]+$/;
 
-const getStringValue = (value) => (typeof value === "string" ? value.trim() : "");
+const getStringValue = (value) =>
+  typeof value === "string" ? value.trim() : "";
 
 const validateRequestInformationSubmission = (body) => {
   const name = getStringValue(body.name);
@@ -42,7 +44,7 @@ const validateRequestInformationSubmission = (body) => {
   return errors;
 };
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const errors = validateRequestInformationSubmission(req.body);
 
   if (Object.keys(errors).length > 0) {
@@ -62,10 +64,26 @@ router.post("/", (req, res) => {
     submittedAt: new Date().toISOString(),
   };
 
-  console.info("Request information submission received", {
-    source: submission.source,
-    submittedAt: submission.submittedAt,
-  });
+  try {
+    const email = await sendRequestInformationEmail(submission);
+
+    console.info("Request information email sent", {
+      emailId: email?.id,
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+  } catch (error) {
+    console.error("Request information email failed", {
+      message: error.message,
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+
+    return res.status(502).json({
+      message:
+        "We could not send your request right now. Please try again later.",
+    });
+  }
 
   return res.status(201).json({
     message: "Request information submission received.",
