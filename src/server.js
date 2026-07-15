@@ -1,6 +1,8 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import deliveryRequestRoutes from "./routes/deliveryRequest.js";
+import requestInformationRoutes from "./routes/requestInformation.js";
 
 dotenv.config();
 
@@ -11,6 +13,7 @@ const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 
 app.use(cors({ origin: corsOrigin }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 app.get("/", (_req, res) => {
   res.json({
@@ -22,6 +25,9 @@ app.get("/", (_req, res) => {
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
+
+app.use("/api/delivery-request", deliveryRequestRoutes);
+app.use("/api/request-information", requestInformationRoutes);
 
 app.listen(port, host, () => {
   console.log(`Efficient Global backend listening at http://${host}:${port}`);
