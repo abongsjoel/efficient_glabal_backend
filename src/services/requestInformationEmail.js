@@ -1,31 +1,6 @@
-import { Resend } from "resend";
+import { escapeHtml, formatOptionalValue, sendEmail } from "./resendEmail.js";
 
-const defaultEmailTo = "abongsjoel@gmail.com";
 const defaultEmailSubject = "New request information submission";
-
-let resendClient;
-
-const getResendClient = () => {
-  if (!process.env.RESEND_API_KEY) {
-    throw new Error("RESEND_API_KEY is not configured.");
-  }
-
-  if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-
-  return resendClient;
-};
-
-const escapeHtml = (value) =>
-  String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-const formatOptionalValue = (value) => value || "Not provided";
 
 const buildRequestInformationText = (submission) => [
   "New request information submission",
@@ -80,28 +55,10 @@ const buildRequestInformationHtml = (submission) => {
 };
 
 export const sendRequestInformationEmail = async (submission) => {
-  const resend = getResendClient();
-  const emailFrom = process.env.EMAIL_FROM;
-  const emailTo = process.env.EMAIL_TO || defaultEmailTo;
-  const emailSubject =
-    process.env.REQUEST_INFORMATION_EMAIL_SUBJECT || defaultEmailSubject;
-
-  if (!emailFrom) {
-    throw new Error("EMAIL_FROM is not configured.");
-  }
-
-  const { data, error } = await resend.emails.send({
-    from: emailFrom,
-    to: [emailTo],
+  return sendEmail({
     replyTo: submission.email,
-    subject: emailSubject,
+    subject: process.env.REQUEST_INFORMATION_EMAIL_SUBJECT || defaultEmailSubject,
     text: buildRequestInformationText(submission).join("\n"),
     html: buildRequestInformationHtml(submission),
   });
-
-  if (error) {
-    throw new Error(error.message || "Resend could not send the email.");
-  }
-
-  return data;
 };

@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
 
 dotenv.config();
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.use("/api/delivery-request", deliveryRequestRoutes);
 app.use("/api/request-information", requestInformationRoutes);
 
 app.listen(port, host, () => {
