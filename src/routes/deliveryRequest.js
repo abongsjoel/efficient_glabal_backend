@@ -9,6 +9,18 @@ const phoneCharacterPattern = /^\+?[0-9\s().-]+$/;
 const getStringValue = (value) =>
   typeof value === "string" ? value.trim() : "";
 
+const getCurrentMinuteStart = () => {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  return now;
+};
+
+const getDateTimeLocalValueDate = (value) => {
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const validateContactFields = (body) => {
   const email = getStringValue(body.email);
   const phone = getStringValue(body.phone);
@@ -36,6 +48,7 @@ const validateContactFields = (body) => {
 
 const validateDeliveryRequestSubmission = (body) => {
   const errors = {};
+  const datetime = getStringValue(body.datetime);
   const requiredFields = [
     { name: "pickup", message: "Enter a pickup location." },
     { name: "delivery", message: "Enter a delivery location." },
@@ -50,6 +63,16 @@ const validateDeliveryRequestSubmission = (body) => {
       errors[name] = message;
     }
   });
+
+  if (datetime) {
+    const requestedDate = getDateTimeLocalValueDate(datetime);
+
+    if (!requestedDate) {
+      errors.datetime = "Enter a valid date and time.";
+    } else if (requestedDate < getCurrentMinuteStart()) {
+      errors.datetime = "Select a date and time that is not in the past.";
+    }
+  }
 
   return {
     ...errors,
