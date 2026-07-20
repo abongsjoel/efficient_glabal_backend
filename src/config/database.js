@@ -3,7 +3,8 @@ import { MongoClient } from "mongodb";
 let client;
 let database;
 
-const getDatabaseName = () => process.env.MONGODB_DB_NAME || "efficient_global";
+export const getDatabaseName = () =>
+  process.env.MONGODB_DB_NAME || "efficient_global";
 
 export const connectToDatabase = async () => {
   if (database) {

@@ -1,7 +1,11 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
-import { connectToDatabase } from "./config/database.js";
+import {
+  connectToDatabase,
+  getDatabase,
+  getDatabaseName,
+} from "./config/database.js";
 import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
 
@@ -39,6 +43,30 @@ app.get("/", (_req, res) => {
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+app.get("/health/db", async (_req, res) => {
+  try {
+    await getDatabase().command({ ping: 1 });
+
+    res.json({
+      status: "ok",
+      database: {
+        name: getDatabaseName(),
+        connected: true,
+      },
+    });
+  } catch (error) {
+    console.error("MongoDB health check failed", error);
+
+    res.status(503).json({
+      status: "error",
+      database: {
+        name: getDatabaseName(),
+        connected: false,
+      },
+    });
+  }
 });
 
 app.use("/api/delivery-request", deliveryRequestRoutes);
