@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import { connectToDatabase } from "./config/database.js";
 import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
 
@@ -43,6 +44,17 @@ app.get("/health", (_req, res) => {
 app.use("/api/delivery-request", deliveryRequestRoutes);
 app.use("/api/request-information", requestInformationRoutes);
 
-app.listen(port, host, () => {
-  console.log(`Efficient Global backend listening at http://${host}:${port}`);
-});
+const startServer = async () => {
+  try {
+    await connectToDatabase();
+
+    app.listen(port, host, () => {
+      console.log(`Efficient Global backend listening at http://${host}:${port}`);
+    });
+  } catch (error) {
+    console.error("Failed to start Efficient Global backend", error);
+    process.exit(1);
+  }
+};
+
+startServer();
