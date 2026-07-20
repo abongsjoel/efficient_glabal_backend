@@ -8,6 +8,7 @@ import {
 } from "./config/database.js";
 import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
+import { initializeAdminCollection } from "./services/adminService.js";
 
 dotenv.config();
 
@@ -75,6 +76,7 @@ app.use("/api/request-information", requestInformationRoutes);
 const startServer = async () => {
   try {
     await connectToDatabase();
+    await initializeAdminCollection();
 
     app.listen(port, host, () => {
       console.log(`Efficient Global backend listening at http://${host}:${port}`);
