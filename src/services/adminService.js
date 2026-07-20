@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import {
   adminRoleValues,
@@ -7,11 +8,17 @@ import {
 } from "../constants/admin.js";
 import {
   createAdmin,
+  createAdminSession,
+  deleteAdminSessionByTokenHash,
   ensureAdminIndexes,
+  findActiveAdminSessionByTokenHash,
   findAdminByEmail,
+  findAdminById,
+  touchAdminSession,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
+const defaultSessionTtlHours = 8;
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -23,6 +30,20 @@ export const verifyAdminPassword = (password, passwordHash) =>
   bcrypt.compare(password, passwordHash);
 
 export const initializeAdminCollection = () => ensureAdminIndexes();
+
+const getSessionTtlHours = () => {
+  const configuredHours = Number(process.env.ADMIN_SESSION_TTL_HOURS);
+
+  return Number.isFinite(configuredHours) && configuredHours > 0
+    ? configuredHours
+    : defaultSessionTtlHours;
+};
+
+export const getAdminSessionMaxAgeMs = () =>
+  getSessionTtlHours() * 60 * 60 * 1000;
+
+export const hashSessionToken = (token) =>
+  createHash("sha256").update(token).digest("hex");
 
 export const toSafeAdmin = (admin) => ({
   id: admin._id.toString(),
@@ -49,6 +70,56 @@ export const authenticateAdmin = async ({ email, password }) => {
   );
 
   return isPasswordValid ? toSafeAdmin(admin) : null;
+};
+
+export const createSessionForAdmin = async (adminId) => {
+  const token = randomBytes(32).toString("base64url");
+  const maxAgeMs = getAdminSessionMaxAgeMs();
+  const expiresAt = new Date(Date.now() + maxAgeMs);
+
+  await createAdminSession({
+    adminId,
+    tokenHash: hashSessionToken(token),
+    expiresAt,
+  });
+
+  return {
+    token,
+    maxAgeMs,
+    expiresAt,
+  };
+};
+
+export const getAdminFromSessionToken = async (token) => {
+  if (!token) {
+    return null;
+  }
+
+  const session = await findActiveAdminSessionByTokenHash(
+    hashSessionToken(token),
+  );
+
+  if (!session) {
+    return null;
+  }
+
+  const admin = await findAdminById(session.adminId);
+
+  if (!admin || admin.status !== adminStatuses.ACTIVE) {
+    return null;
+  }
+
+  await touchAdminSession(session._id);
+
+  return toSafeAdmin(admin);
+};
+
+export const deleteAdminSession = (token) => {
+  if (!token) {
+    return null;
+  }
+
+  return deleteAdminSessionByTokenHash(hashSessionToken(token));
 };
 
 export const createAdminAccount = async ({

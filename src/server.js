@@ -23,6 +23,7 @@ const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
 
 app.use(
   cors({
+    credentials: true,
     origin(origin, callback) {
       if (!origin || corsOrigins.includes(origin)) {
         callback(null, true);
