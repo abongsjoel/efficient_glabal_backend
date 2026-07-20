@@ -6,6 +6,7 @@ import {
   getDatabase,
   getDatabaseName,
 } from "./config/database.js";
+import adminRoutes from "./routes/admin.js";
 import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
 import { initializeAdminCollection } from "./services/adminService.js";
@@ -70,6 +71,7 @@ app.get("/health/db", async (_req, res) => {
   }
 });
 
+app.use("/api/admin", adminRoutes);
 app.use("/api/delivery-request", deliveryRequestRoutes);
 app.use("/api/request-information", requestInformationRoutes);
 

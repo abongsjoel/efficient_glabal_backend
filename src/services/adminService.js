@@ -24,6 +24,33 @@ export const verifyAdminPassword = (password, passwordHash) =>
 
 export const initializeAdminCollection = () => ensureAdminIndexes();
 
+export const toSafeAdmin = (admin) => ({
+  id: admin._id.toString(),
+  name: admin.name,
+  email: admin.email,
+  role: admin.role,
+  status: admin.status,
+});
+
+export const authenticateAdmin = async ({ email, password }) => {
+  const admin = await findAdminByEmail(email);
+
+  if (!admin) {
+    return null;
+  }
+
+  if (admin.status !== adminStatuses.ACTIVE) {
+    return null;
+  }
+
+  const isPasswordValid = await verifyAdminPassword(
+    password,
+    admin.passwordHash,
+  );
+
+  return isPasswordValid ? toSafeAdmin(admin) : null;
+};
+
 export const createAdminAccount = async ({
   name,
   email,
