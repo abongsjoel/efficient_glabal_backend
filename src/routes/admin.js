@@ -16,6 +16,8 @@ const getAdminSessionCookieName = () =>
 const getStringValue = (value) =>
   typeof value === "string" ? value.trim() : "";
 
+const getBooleanValue = (value) => value === true || value === "true";
+
 const parseCookies = (cookieHeader = "") =>
   cookieHeader.split(";").reduce((cookies, cookie) => {
     const [name, ...valueParts] = cookie.trim().split("=");
@@ -114,7 +116,9 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const session = await createSessionForAdmin(admin.id);
+    const session = await createSessionForAdmin(admin.id, {
+      keepMeLoggedIn: getBooleanValue(req.body.keepMeLoggedIn),
+    });
 
     res.cookie(
       getAdminSessionCookieName(),

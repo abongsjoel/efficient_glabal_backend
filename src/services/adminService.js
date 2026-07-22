@@ -19,6 +19,7 @@ import {
 
 const passwordSaltRounds = 12;
 const defaultSessionTtlHours = 8;
+const defaultRememberedSessionTtlHours = 72;
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -31,16 +32,33 @@ export const verifyAdminPassword = (password, passwordHash) =>
 
 export const initializeAdminCollection = () => ensureAdminIndexes();
 
-const getSessionTtlHours = () => {
-  const configuredHours = Number(process.env.ADMIN_SESSION_TTL_HOURS);
+const getPositiveEnvironmentNumber = (key, fallback) => {
+  const configuredValue = Number(process.env[key]);
 
-  return Number.isFinite(configuredHours) && configuredHours > 0
-    ? configuredHours
-    : defaultSessionTtlHours;
+  return Number.isFinite(configuredValue) && configuredValue > 0
+    ? configuredValue
+    : fallback;
 };
 
-export const getAdminSessionMaxAgeMs = () =>
-  getSessionTtlHours() * 60 * 60 * 1000;
+const getSessionTtlHours = () =>
+  getPositiveEnvironmentNumber(
+    "ADMIN_SESSION_TTL_HOURS",
+    defaultSessionTtlHours,
+  );
+
+const getRememberedSessionTtlHours = () =>
+  getPositiveEnvironmentNumber(
+    "ADMIN_REMEMBERED_SESSION_TTL_HOURS",
+    defaultRememberedSessionTtlHours,
+  );
+
+export const getAdminSessionMaxAgeMs = ({ keepMeLoggedIn = false } = {}) => {
+  const sessionTtlHours = keepMeLoggedIn
+    ? getRememberedSessionTtlHours()
+    : getSessionTtlHours();
+
+  return sessionTtlHours * 60 * 60 * 1000;
+};
 
 export const hashSessionToken = (token) =>
   createHash("sha256").update(token).digest("hex");
@@ -72,9 +90,12 @@ export const authenticateAdmin = async ({ email, password }) => {
   return isPasswordValid ? toSafeAdmin(admin) : null;
 };
 
-export const createSessionForAdmin = async (adminId) => {
+export const createSessionForAdmin = async (
+  adminId,
+  { keepMeLoggedIn = false } = {},
+) => {
   const token = randomBytes(32).toString("base64url");
-  const maxAgeMs = getAdminSessionMaxAgeMs();
+  const maxAgeMs = getAdminSessionMaxAgeMs({ keepMeLoggedIn });
   const expiresAt = new Date(Date.now() + maxAgeMs);
 
   await createAdminSession({
