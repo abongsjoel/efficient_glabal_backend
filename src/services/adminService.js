@@ -15,15 +15,12 @@ import {
   findAdminByEmail,
   findAdminByIdentifier,
   findAdminById,
-  normalizeAdminEmail,
-  normalizeAdminUsername,
   touchAdminSession,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
 const defaultSessionTtlHours = 8;
 const defaultRememberedSessionTtlHours = 72;
-const usernamePattern = /^[a-z0-9][a-z0-9._-]{2,39}$/;
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -73,7 +70,6 @@ export const toSafeAdmin = (admin) => ({
   email: admin.email,
   role: admin.role,
   status: admin.status,
-  username: admin.username,
 });
 
 export const authenticateAdmin = async ({ identifier, password }) => {
@@ -154,7 +150,6 @@ export const createAdminAccount = async ({
   password,
   role = adminRoles.VIEWER,
   status = adminStatuses.ACTIVE,
-  username,
 }) => {
   if (!name?.trim()) {
     throw new Error("Admin name is required.");
@@ -168,17 +163,6 @@ export const createAdminAccount = async ({
     throw new Error("Admin password is required.");
   }
 
-  const normalizedEmail = normalizeAdminEmail(email);
-  const normalizedUsername = normalizeAdminUsername(
-    username || normalizedEmail.split("@")[0],
-  );
-
-  if (!usernamePattern.test(normalizedUsername)) {
-    throw new Error(
-      "Admin username must be 3-40 characters and use letters, numbers, dots, underscores, or hyphens.",
-    );
-  }
-
   if (!validateAdminRole(role)) {
     throw new Error(`Invalid admin role "${role}".`);
   }
@@ -187,7 +171,7 @@ export const createAdminAccount = async ({
     throw new Error(`Invalid admin status "${status}".`);
   }
 
-  const existingAdmin = await findAdminByEmail(normalizedEmail);
+  const existingAdmin = await findAdminByEmail(email);
 
   if (existingAdmin) {
     throw new Error(`Admin with email "${email}" already exists.`);
@@ -201,6 +185,5 @@ export const createAdminAccount = async ({
     passwordHash,
     role,
     status,
-    username: normalizedUsername,
   });
 };

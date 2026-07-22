@@ -7,9 +7,6 @@ const adminSessionsCollectionName = "admin_sessions";
 
 export const normalizeAdminEmail = (email) => email.trim().toLowerCase();
 
-export const normalizeAdminUsername = (username) =>
-  username.trim().toLowerCase();
-
 export const getAdminsCollection = () =>
   getDatabase().collection(adminsCollectionName);
 
@@ -25,14 +22,6 @@ export const ensureAdminIndexes = async () => {
     {
       unique: true,
       name: "unique_admin_email",
-    },
-  );
-  await admins.createIndex(
-    { username: 1 },
-    {
-      name: "unique_admin_username",
-      sparse: true,
-      unique: true,
     },
   );
   await admins.createIndex(
@@ -78,19 +67,14 @@ export const findAdminByIdentifier = (identifier) => {
   }
 
   return getAdminsCollection().findOne({
-    $or: [
-      { username: normalizeAdminUsername(normalizedIdentifier) },
-      {
-        $expr: {
-          $eq: [
-            {
-              $arrayElemAt: [{ $split: ["$email", "@"] }, 0],
-            },
-            normalizedIdentifier,
-          ],
+    $expr: {
+      $eq: [
+        {
+          $arrayElemAt: [{ $split: ["$email", "@"] }, 0],
         },
-      },
-    ],
+        normalizedIdentifier,
+      ],
+    },
   });
 };
 
@@ -111,7 +95,6 @@ export const createAdmin = async ({
   passwordHash,
   role,
   status = adminStatuses.ACTIVE,
-  username,
 }) => {
   const now = new Date();
   const admin = {
@@ -123,10 +106,6 @@ export const createAdmin = async ({
     createdAt: now,
     updatedAt: now,
   };
-
-  if (username) {
-    admin.username = normalizeAdminUsername(username);
-  }
 
   const result = await getAdminsCollection().insertOne(admin);
 

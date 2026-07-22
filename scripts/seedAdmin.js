@@ -37,7 +37,6 @@ const seedAdmin = async () => {
   const name = getRequiredEnvironmentValue("ADMIN_SEED_NAME");
   const email = getRequiredEnvironmentValue("ADMIN_SEED_EMAIL");
   const password = getRequiredEnvironmentValue("ADMIN_SEED_PASSWORD");
-  const username = process.env.ADMIN_SEED_USERNAME?.trim();
   const existingAdmin = await findAdminByEmail(email);
 
   if (existingAdmin) {
@@ -50,10 +49,9 @@ const seedAdmin = async () => {
     email,
     password,
     role: adminRoles.SUPER_ADMIN,
-    username,
   });
 
-  console.log(`Seeded super admin ${admin.email} (${admin.username}).`);
+  console.log(`Seeded super admin ${admin.email}.`);
 };
 
 try {
