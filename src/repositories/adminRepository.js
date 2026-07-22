@@ -7,6 +7,9 @@ const adminSessionsCollectionName = "admin_sessions";
 
 export const normalizeAdminEmail = (email) => email.trim().toLowerCase();
 
+export const normalizeAdminUsername = (username) =>
+  username.trim().toLowerCase();
+
 export const getAdminsCollection = () =>
   getDatabase().collection(adminsCollectionName);
 
@@ -22,6 +25,14 @@ export const ensureAdminIndexes = async () => {
     {
       unique: true,
       name: "unique_admin_email",
+    },
+  );
+  await admins.createIndex(
+    { username: 1 },
+    {
+      name: "unique_admin_username",
+      sparse: true,
+      unique: true,
     },
   );
   await admins.createIndex(
@@ -55,8 +66,37 @@ export const ensureAdminIndexes = async () => {
 export const findAdminByEmail = (email) =>
   getAdminsCollection().findOne({ email: normalizeAdminEmail(email) });
 
+export const findAdminByIdentifier = (identifier) => {
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  if (normalizedIdentifier.includes("@")) {
+    return findAdminByEmail(normalizedIdentifier);
+  }
+
+  return getAdminsCollection().findOne({
+    $or: [
+      { username: normalizeAdminUsername(normalizedIdentifier) },
+      {
+        $expr: {
+          $eq: [
+            {
+              $arrayElemAt: [{ $split: ["$email", "@"] }, 0],
+            },
+            normalizedIdentifier,
+          ],
+        },
+      },
+    ],
+  });
+};
+
 export const findAdminById = (id) => {
-  const objectId = id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
+  const objectId =
+    id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
 
   if (!objectId) {
     return null;
@@ -71,6 +111,7 @@ export const createAdmin = async ({
   passwordHash,
   role,
   status = adminStatuses.ACTIVE,
+  username,
 }) => {
   const now = new Date();
   const admin = {
@@ -82,6 +123,10 @@ export const createAdmin = async ({
     createdAt: now,
     updatedAt: now,
   };
+
+  if (username) {
+    admin.username = normalizeAdminUsername(username);
+  }
 
   const result = await getAdminsCollection().insertOne(admin);
 
