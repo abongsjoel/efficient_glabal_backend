@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-The server defaults to `http://localhost:5000`.
+The server defaults to `http://127.0.0.1:5050`.
 
 ## Environment
 
@@ -33,5 +33,5 @@ For production, `EMAIL_FROM` should use a sender address on a domain verified in
 ## Health Check
 
 ```bash
-curl http://localhost:5000/health
+curl http://127.0.0.1:5050/health
 ```
