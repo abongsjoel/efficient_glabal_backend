@@ -8,13 +8,16 @@ import {
 
 const router = Router();
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
 const getAdminSessionCookieName = () =>
   process.env.ADMIN_SESSION_COOKIE_NAME || "efficient_global_admin_session";
 
 const getStringValue = (value) =>
   typeof value === "string" ? value.trim() : "";
+
+const getBooleanValue = (value) => value === true || value === "true";
+
+const getLoginIdentifier = (body) =>
+  getStringValue(body.identifier || body.email || body.username);
 
 const parseCookies = (cookieHeader = "") =>
   cookieHeader.split(";").reduce((cookies, cookie) => {
@@ -75,14 +78,12 @@ const getClearAdminSessionCookieOptions = () => {
 };
 
 const validateAdminLogin = (body) => {
-  const email = getStringValue(body.email);
+  const identifier = getLoginIdentifier(body);
   const password = getStringValue(body.password);
   const errors = {};
 
-  if (!email) {
-    errors.email = "Enter an email address.";
-  } else if (!emailPattern.test(email)) {
-    errors.email = "Enter a valid email address.";
+  if (!identifier) {
+    errors.identifier = "Enter your username or email.";
   }
 
   if (!password) {
@@ -104,17 +105,19 @@ router.post("/login", async (req, res) => {
 
   try {
     const admin = await authenticateAdmin({
-      email: getStringValue(req.body.email),
+      identifier: getLoginIdentifier(req.body),
       password: getStringValue(req.body.password),
     });
 
     if (!admin) {
       return res.status(401).json({
-        message: "Invalid email or password.",
+        message: "Invalid username/email or password.",
       });
     }
 
-    const session = await createSessionForAdmin(admin.id);
+    const session = await createSessionForAdmin(admin.id, {
+      keepMeLoggedIn: getBooleanValue(req.body.keepMeLoggedIn),
+    });
 
     res.cookie(
       getAdminSessionCookieName(),

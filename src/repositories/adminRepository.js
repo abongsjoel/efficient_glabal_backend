@@ -55,8 +55,32 @@ export const ensureAdminIndexes = async () => {
 export const findAdminByEmail = (email) =>
   getAdminsCollection().findOne({ email: normalizeAdminEmail(email) });
 
+export const findAdminByIdentifier = (identifier) => {
+  const normalizedIdentifier = identifier.trim().toLowerCase();
+
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  if (normalizedIdentifier.includes("@")) {
+    return findAdminByEmail(normalizedIdentifier);
+  }
+
+  return getAdminsCollection().findOne({
+    $expr: {
+      $eq: [
+        {
+          $arrayElemAt: [{ $split: ["$email", "@"] }, 0],
+        },
+        normalizedIdentifier,
+      ],
+    },
+  });
+};
+
 export const findAdminById = (id) => {
-  const objectId = id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
+  const objectId =
+    id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
 
   if (!objectId) {
     return null;
