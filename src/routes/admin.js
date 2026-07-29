@@ -4,6 +4,8 @@ import {
   createSessionForAdmin,
   deleteAdminSession,
   getAdminFromSessionToken,
+  removeAdminProfileImage,
+  updateAdminProfileImage,
 } from "../services/adminService.js";
 
 const router = Router();
@@ -39,6 +41,9 @@ const parseCookies = (cookieHeader = "") =>
 
 const getAdminSessionToken = (req) =>
   parseCookies(req.headers.cookie)[getAdminSessionCookieName()];
+
+const getAuthenticatedAdmin = (req) =>
+  getAdminFromSessionToken(getAdminSessionToken(req));
 
 const getBooleanEnvironmentValue = (key, fallback) => {
   const value = process.env[key];
@@ -142,7 +147,7 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", async (req, res) => {
   try {
-    const admin = await getAdminFromSessionToken(getAdminSessionToken(req));
+    const admin = await getAuthenticatedAdmin(req);
 
     if (!admin) {
       return res.status(401).json({
@@ -158,6 +163,84 @@ router.get("/me", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not verify your session right now.",
+    });
+  }
+});
+
+router.patch("/profile-image", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminProfileImage({
+      adminId: admin.id,
+      profileImage: getStringValue(req.body?.profileImage),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile image updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_PROFILE_IMAGE") {
+      return res.status(400).json({
+        message: error.message,
+        errors: {
+          profileImage: error.message,
+        },
+      });
+    }
+
+    console.error("Admin profile image update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your profile image right now.",
+    });
+  }
+});
+
+router.delete("/profile-image", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await removeAdminProfileImage(admin.id);
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile image removed.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    console.error("Admin profile image removal failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not remove your profile image right now.",
     });
   }
 });

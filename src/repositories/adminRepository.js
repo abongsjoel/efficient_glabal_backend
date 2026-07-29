@@ -13,6 +13,9 @@ export const getAdminsCollection = () =>
 export const getAdminSessionsCollection = () =>
   getDatabase().collection(adminSessionsCollectionName);
 
+const toObjectId = (id) =>
+  id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
+
 export const ensureAdminIndexes = async () => {
   const admins = getAdminsCollection();
   const adminSessions = getAdminSessionsCollection();
@@ -79,14 +82,53 @@ export const findAdminByIdentifier = (identifier) => {
 };
 
 export const findAdminById = (id) => {
-  const objectId =
-    id instanceof ObjectId ? id : ObjectId.isValid(id) && new ObjectId(id);
+  const objectId = toObjectId(id);
 
   if (!objectId) {
     return null;
   }
 
   return getAdminsCollection().findOne({ _id: objectId });
+};
+
+export const updateAdminProfileImage = (id, profileImage) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $set: {
+        profileImage,
+        updatedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+};
+
+export const removeAdminProfileImage = (id) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $unset: {
+        profileImage: "",
+      },
+      $set: {
+        updatedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" },
+  );
 };
 
 export const createAdmin = async ({

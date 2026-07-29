@@ -15,12 +15,17 @@ import {
   findAdminByEmail,
   findAdminByIdentifier,
   findAdminById,
+  removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
+  updateAdminProfileImage as updateAdminProfileImageById,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
 const defaultSessionTtlHours = 8;
 const defaultRememberedSessionTtlHours = 72;
+const maxProfileImageBytes = 1_000_000;
+const profileImageDataUrlPattern =
+  /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/]+={0,2}$/i;
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -70,7 +75,45 @@ export const toSafeAdmin = (admin) => ({
   email: admin.email,
   role: admin.role,
   status: admin.status,
+  profileImage: admin.profileImage || "",
 });
+
+const getDataUrlBase64Payload = (dataUrl) => dataUrl.split(",")[1] || "";
+
+const getBase64ByteLength = (base64Value) => {
+  const padding = base64Value.endsWith("==")
+    ? 2
+    : base64Value.endsWith("=")
+      ? 1
+      : 0;
+
+  return (base64Value.length * 3) / 4 - padding;
+};
+
+export const validateAdminProfileImage = (profileImage) => {
+  if (typeof profileImage !== "string" || !profileImage.trim()) {
+    return "Choose a profile image to upload.";
+  }
+
+  const trimmedProfileImage = profileImage.trim();
+
+  if (!profileImageDataUrlPattern.test(trimmedProfileImage)) {
+    return "Upload a PNG, JPG, or WebP profile image.";
+  }
+
+  const imageBytes = getBase64ByteLength(
+    getDataUrlBase64Payload(trimmedProfileImage),
+  );
+
+  if (imageBytes > maxProfileImageBytes) {
+    return "Profile image must be 1 MB or smaller.";
+  }
+
+  return "";
+};
+
+const getUpdatedAdminDocument = (updateResult) =>
+  updateResult?.value ?? updateResult;
 
 export const authenticateAdmin = async ({ identifier, password }) => {
   const admin = await findAdminByIdentifier(identifier);
@@ -142,6 +185,31 @@ export const deleteAdminSession = (token) => {
   }
 
   return deleteAdminSessionByTokenHash(hashSessionToken(token));
+};
+
+export const updateAdminProfileImage = async ({ adminId, profileImage }) => {
+  const validationMessage = validateAdminProfileImage(profileImage);
+
+  if (validationMessage) {
+    const error = new Error(validationMessage);
+    error.code = "INVALID_PROFILE_IMAGE";
+    throw error;
+  }
+
+  const updatedAdmin = await updateAdminProfileImageById(
+    adminId,
+    profileImage.trim(),
+  );
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
+};
+
+export const removeAdminProfileImage = async (adminId) => {
+  const updatedAdmin = await removeAdminProfileImageById(adminId);
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
 };
 
 export const createAdminAccount = async ({

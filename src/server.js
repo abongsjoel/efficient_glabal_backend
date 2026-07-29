@@ -16,6 +16,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 5050;
 const host = process.env.HOST || "127.0.0.1";
+const requestBodyLimit = process.env.REQUEST_BODY_LIMIT || "2mb";
 const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim())
@@ -34,8 +35,8 @@ app.use(
     },
   }),
 );
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: requestBodyLimit }));
+app.use(express.urlencoded({ extended: false, limit: requestBodyLimit }));
 
 app.get("/", (_req, res) => {
   res.json({
