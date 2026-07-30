@@ -31,6 +31,8 @@ const maxAdminPasswordLength = 72;
 const maxProfileImageBytes = 1_000_000;
 const profileImageDataUrlPattern =
   /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/]+={0,2}$/i;
+const adminPasswordRequirementMessage =
+  "Password must include a lowercase letter, uppercase letter, number, and special character.";
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -117,6 +119,13 @@ export const validateAdminPasswordChange = ({
     errors.newPassword = `Password must be at least ${minAdminPasswordLength} characters.`;
   } else if (newPassword.length > maxAdminPasswordLength) {
     errors.newPassword = `Password must be ${maxAdminPasswordLength} characters or fewer.`;
+  } else if (
+    !/[a-z]/.test(newPassword) ||
+    !/[A-Z]/.test(newPassword) ||
+    !/[0-9]/.test(newPassword) ||
+    !/[^A-Za-z0-9\s]/.test(newPassword)
+  ) {
+    errors.newPassword = adminPasswordRequirementMessage;
   }
 
   if (!confirmPassword.trim()) {
