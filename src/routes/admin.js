@@ -44,7 +44,18 @@ const parseCookies = (cookieHeader = "") =>
   }, {});
 
 const getAdminSessionToken = (req) =>
+  getBearerToken(req.headers.authorization) ||
   parseCookies(req.headers.cookie)[getAdminSessionCookieName()];
+
+const getBearerToken = (authorizationHeader = "") => {
+  const [scheme, token] = authorizationHeader.split(" ");
+
+  if (scheme?.toLowerCase() !== "bearer" || !token) {
+    return "";
+  }
+
+  return token;
+};
 
 const getAuthenticatedAdmin = (req) =>
   getAdminFromSessionToken(getAdminSessionToken(req));
@@ -143,6 +154,10 @@ router.post("/login", async (req, res) => {
     return res.json({
       message: "Login successful.",
       admin,
+      session: {
+        expiresAt: session.expiresAt.toISOString(),
+        token: session.token,
+      },
     });
   } catch (error) {
     console.error("Admin login failed", {
