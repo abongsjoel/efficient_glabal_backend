@@ -16,7 +16,7 @@ The server defaults to `http://127.0.0.1:5050`.
 Create a local `.env` file using `.env.example` as the template.
 
 ```bash
-CORS_ORIGIN=http://localhost:5173,https://www.efficientgloba.com
+CORS_ORIGIN=http://localhost:5173,https://efficientgloba.com,https://www.efficientgloba.com
 RESEND_API_KEY=re_xxxxxxxxx
 EMAIL_FROM="Efficient Global <onboarding@resend.dev>"
 EMAIL_TO=abongsjoel@gmail.com,info@efficientgloba.com
@@ -29,6 +29,15 @@ Use commas in `CORS_ORIGIN` to allow multiple frontend origins, such as local Vi
 Use commas in `EMAIL_TO` to send each request notification to multiple inboxes.
 
 For production, `EMAIL_FROM` should use a sender address on a domain verified in Resend.
+
+For Render production admin login, use cross-site cookie settings because the frontend and backend are on different domains:
+
+```bash
+ADMIN_COOKIE_SAME_SITE=none
+ADMIN_COOKIE_SECURE=true
+```
+
+After changing these values, redeploy the backend and sign in again so the browser receives a fresh session cookie.
 
 ## Health Check
 
