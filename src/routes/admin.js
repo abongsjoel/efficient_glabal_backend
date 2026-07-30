@@ -5,6 +5,7 @@ import {
   deleteAdminSession,
   getAdminFromSessionToken,
   removeAdminProfileImage,
+  updateAdminProfile,
   updateAdminProfileImage,
 } from "../services/adminService.js";
 
@@ -163,6 +164,51 @@ router.get("/me", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not verify your session right now.",
+    });
+  }
+});
+
+router.patch("/profile", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminProfile({
+      adminId: admin.id,
+      name: getStringValue(req.body?.name || req.body?.displayName),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_PROFILE") {
+      return res.status(400).json({
+        message: error.message,
+        errors: {
+          name: error.message,
+        },
+      });
+    }
+
+    console.error("Admin profile update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your profile right now.",
     });
   }
 });

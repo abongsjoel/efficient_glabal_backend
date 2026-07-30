@@ -91,6 +91,25 @@ export const findAdminById = (id) => {
   return getAdminsCollection().findOne({ _id: objectId });
 };
 
+export const updateAdminName = (id, name) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $set: {
+        name,
+        updatedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+};
+
 export const updateAdminProfileImage = (id, profileImage) => {
   const objectId = toObjectId(id);
 

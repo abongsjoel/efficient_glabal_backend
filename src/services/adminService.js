@@ -17,12 +17,14 @@ import {
   findAdminById,
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
+  updateAdminName as updateAdminNameById,
   updateAdminProfileImage as updateAdminProfileImageById,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
 const defaultSessionTtlHours = 8;
 const defaultRememberedSessionTtlHours = 72;
+const maxAdminNameLength = 80;
 const maxProfileImageBytes = 1_000_000;
 const profileImageDataUrlPattern =
   /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/]+={0,2}$/i;
@@ -77,6 +79,23 @@ export const toSafeAdmin = (admin) => ({
   status: admin.status,
   profileImage: admin.profileImage || "",
 });
+
+const normalizeAdminName = (name) =>
+  typeof name === "string" ? name.trim().replace(/\s+/g, " ") : "";
+
+export const validateAdminName = (name) => {
+  const normalizedName = normalizeAdminName(name);
+
+  if (!normalizedName) {
+    return "Enter your display name.";
+  }
+
+  if (normalizedName.length > maxAdminNameLength) {
+    return `Display name must be ${maxAdminNameLength} characters or fewer.`;
+  }
+
+  return "";
+};
 
 const getDataUrlBase64Payload = (dataUrl) => dataUrl.split(",")[1] || "";
 
@@ -185,6 +204,24 @@ export const deleteAdminSession = (token) => {
   }
 
   return deleteAdminSessionByTokenHash(hashSessionToken(token));
+};
+
+export const updateAdminProfile = async ({ adminId, name }) => {
+  const validationMessage = validateAdminName(name);
+
+  if (validationMessage) {
+    const error = new Error(validationMessage);
+    error.code = "INVALID_ADMIN_PROFILE";
+    throw error;
+  }
+
+  const updatedAdmin = await updateAdminNameById(
+    adminId,
+    normalizeAdminName(name),
+  );
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
 };
 
 export const updateAdminProfileImage = async ({ adminId, profileImage }) => {
