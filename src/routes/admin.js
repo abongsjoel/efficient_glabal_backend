@@ -65,11 +65,17 @@ const getBooleanEnvironmentValue = (key, fallback) => {
 
 const getAdminSessionCookieOptions = (maxAge) => {
   const isProduction = process.env.NODE_ENV === "production";
-  const secure = getBooleanEnvironmentValue(
+  const configuredSameSite = process.env.ADMIN_COOKIE_SAME_SITE?.toLowerCase();
+  const sameSite = ["lax", "strict", "none"].includes(configuredSameSite)
+    ? configuredSameSite
+    : isProduction
+      ? "none"
+      : "lax";
+  const configuredSecure = getBooleanEnvironmentValue(
     "ADMIN_COOKIE_SECURE",
     isProduction,
   );
-  const sameSite = process.env.ADMIN_COOKIE_SAME_SITE || "lax";
+  const secure = sameSite === "none" ? true : configuredSecure;
 
   return {
     httpOnly: true,
