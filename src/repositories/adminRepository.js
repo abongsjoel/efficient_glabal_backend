@@ -110,6 +110,25 @@ export const updateAdminName = (id, name) => {
   );
 };
 
+export const updateAdminPassword = (id, passwordHash) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $set: {
+        passwordHash,
+        updatedAt: new Date(),
+      },
+    },
+    { returnDocument: "after" },
+  );
+};
+
 export const updateAdminProfileImage = (id, profileImage) => {
   const objectId = toObjectId(id);
 

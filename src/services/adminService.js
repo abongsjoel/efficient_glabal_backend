@@ -18,6 +18,7 @@ import {
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
   updateAdminName as updateAdminNameById,
+  updateAdminPassword as updateAdminPasswordById,
   updateAdminProfileImage as updateAdminProfileImageById,
 } from "../repositories/adminRepository.js";
 
@@ -25,6 +26,8 @@ const passwordSaltRounds = 12;
 const defaultSessionTtlHours = 8;
 const defaultRememberedSessionTtlHours = 72;
 const maxAdminNameLength = 80;
+const minAdminPasswordLength = 8;
+const maxAdminPasswordLength = 72;
 const maxProfileImageBytes = 1_000_000;
 const profileImageDataUrlPattern =
   /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/]+={0,2}$/i;
@@ -95,6 +98,44 @@ export const validateAdminName = (name) => {
   }
 
   return "";
+};
+
+export const validateAdminPasswordChange = ({
+  currentPassword = "",
+  newPassword = "",
+  confirmPassword = "",
+} = {}) => {
+  const errors = {};
+
+  if (!currentPassword.trim()) {
+    errors.currentPassword = "Enter your current password.";
+  }
+
+  if (!newPassword.trim()) {
+    errors.newPassword = "Enter a new password.";
+  } else if (newPassword.length < minAdminPasswordLength) {
+    errors.newPassword = `Password must be at least ${minAdminPasswordLength} characters.`;
+  } else if (newPassword.length > maxAdminPasswordLength) {
+    errors.newPassword = `Password must be ${maxAdminPasswordLength} characters or fewer.`;
+  }
+
+  if (!confirmPassword.trim()) {
+    errors.confirmPassword = "Confirm your new password.";
+  } else if (newPassword && confirmPassword !== newPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return errors;
+};
+
+const createAdminPasswordError = (
+  errors,
+  message = "Please correct the highlighted fields.",
+) => {
+  const error = new Error(message);
+  error.code = "INVALID_ADMIN_PASSWORD";
+  error.errors = errors;
+  return error;
 };
 
 const getDataUrlBase64Payload = (dataUrl) => dataUrl.split(",")[1] || "";
@@ -219,6 +260,57 @@ export const updateAdminProfile = async ({ adminId, name }) => {
     adminId,
     normalizeAdminName(name),
   );
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
+};
+
+export const updateAdminPassword = async ({
+  adminId,
+  currentPassword,
+  newPassword,
+  confirmPassword,
+}) => {
+  const errors = validateAdminPasswordChange({
+    currentPassword,
+    newPassword,
+    confirmPassword,
+  });
+
+  if (Object.keys(errors).length > 0) {
+    throw createAdminPasswordError(errors);
+  }
+
+  const admin = await findAdminById(adminId);
+
+  if (!admin) {
+    return null;
+  }
+
+  const isCurrentPasswordValid = await verifyAdminPassword(
+    currentPassword,
+    admin.passwordHash,
+  );
+
+  if (!isCurrentPasswordValid) {
+    throw createAdminPasswordError({
+      currentPassword: "Current password is incorrect.",
+    });
+  }
+
+  const isSamePassword = await verifyAdminPassword(
+    newPassword,
+    admin.passwordHash,
+  );
+
+  if (isSamePassword) {
+    throw createAdminPasswordError({
+      newPassword: "Choose a password different from your current password.",
+    });
+  }
+
+  const passwordHash = await hashAdminPassword(newPassword);
+  const updatedAdmin = await updateAdminPasswordById(adminId, passwordHash);
   const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
 
   return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;

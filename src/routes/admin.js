@@ -5,6 +5,7 @@ import {
   deleteAdminSession,
   getAdminFromSessionToken,
   removeAdminProfileImage,
+  updateAdminPassword,
   updateAdminProfile,
   updateAdminProfileImage,
 } from "../services/adminService.js";
@@ -16,6 +17,8 @@ const getAdminSessionCookieName = () =>
 
 const getStringValue = (value) =>
   typeof value === "string" ? value.trim() : "";
+
+const getRawStringValue = (value) => (typeof value === "string" ? value : "");
 
 const getBooleanValue = (value) => value === true || value === "true";
 
@@ -85,7 +88,7 @@ const getClearAdminSessionCookieOptions = () => {
 
 const validateAdminLogin = (body) => {
   const identifier = getLoginIdentifier(body);
-  const password = getStringValue(body.password);
+  const password = getRawStringValue(body.password);
   const errors = {};
 
   if (!identifier) {
@@ -112,7 +115,7 @@ router.post("/login", async (req, res) => {
   try {
     const admin = await authenticateAdmin({
       identifier: getLoginIdentifier(req.body),
-      password: getStringValue(req.body.password),
+      password: getRawStringValue(req.body.password),
     });
 
     if (!admin) {
@@ -164,6 +167,51 @@ router.get("/me", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not verify your session right now.",
+    });
+  }
+});
+
+router.patch("/password", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminPassword({
+      adminId: admin.id,
+      currentPassword: getRawStringValue(req.body?.currentPassword),
+      newPassword: getRawStringValue(req.body?.newPassword),
+      confirmPassword: getRawStringValue(req.body?.confirmPassword),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Password updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_PASSWORD") {
+      return res.status(400).json({
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+
+    console.error("Admin password update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your password right now.",
     });
   }
 });
