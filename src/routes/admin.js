@@ -4,6 +4,10 @@ import {
   createSessionForAdmin,
   deleteAdminSession,
   getAdminFromSessionToken,
+  removeAdminProfileImage,
+  updateAdminPassword,
+  updateAdminProfile,
+  updateAdminProfileImage,
 } from "../services/adminService.js";
 
 const router = Router();
@@ -13,6 +17,8 @@ const getAdminSessionCookieName = () =>
 
 const getStringValue = (value) =>
   typeof value === "string" ? value.trim() : "";
+
+const getRawStringValue = (value) => (typeof value === "string" ? value : "");
 
 const getBooleanValue = (value) => value === true || value === "true";
 
@@ -39,6 +45,9 @@ const parseCookies = (cookieHeader = "") =>
 
 const getAdminSessionToken = (req) =>
   parseCookies(req.headers.cookie)[getAdminSessionCookieName()];
+
+const getAuthenticatedAdmin = (req) =>
+  getAdminFromSessionToken(getAdminSessionToken(req));
 
 const getBooleanEnvironmentValue = (key, fallback) => {
   const value = process.env[key];
@@ -79,7 +88,7 @@ const getClearAdminSessionCookieOptions = () => {
 
 const validateAdminLogin = (body) => {
   const identifier = getLoginIdentifier(body);
-  const password = getStringValue(body.password);
+  const password = getRawStringValue(body.password);
   const errors = {};
 
   if (!identifier) {
@@ -106,7 +115,7 @@ router.post("/login", async (req, res) => {
   try {
     const admin = await authenticateAdmin({
       identifier: getLoginIdentifier(req.body),
-      password: getStringValue(req.body.password),
+      password: getRawStringValue(req.body.password),
     });
 
     if (!admin) {
@@ -142,7 +151,7 @@ router.post("/login", async (req, res) => {
 
 router.get("/me", async (req, res) => {
   try {
-    const admin = await getAdminFromSessionToken(getAdminSessionToken(req));
+    const admin = await getAuthenticatedAdmin(req);
 
     if (!admin) {
       return res.status(401).json({
@@ -158,6 +167,174 @@ router.get("/me", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not verify your session right now.",
+    });
+  }
+});
+
+router.patch("/password", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminPassword({
+      adminId: admin.id,
+      currentPassword: getRawStringValue(req.body?.currentPassword),
+      newPassword: getRawStringValue(req.body?.newPassword),
+      confirmPassword: getRawStringValue(req.body?.confirmPassword),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Password updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_PASSWORD") {
+      return res.status(400).json({
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+
+    console.error("Admin password update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your password right now.",
+    });
+  }
+});
+
+router.patch("/profile", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminProfile({
+      adminId: admin.id,
+      name: getStringValue(req.body?.name || req.body?.displayName),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_PROFILE") {
+      return res.status(400).json({
+        message: error.message,
+        errors: {
+          name: error.message,
+        },
+      });
+    }
+
+    console.error("Admin profile update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your profile right now.",
+    });
+  }
+});
+
+router.patch("/profile-image", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await updateAdminProfileImage({
+      adminId: admin.id,
+      profileImage: getStringValue(req.body?.profileImage),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile image updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_PROFILE_IMAGE") {
+      return res.status(400).json({
+        message: error.message,
+        errors: {
+          profileImage: error.message,
+        },
+      });
+    }
+
+    console.error("Admin profile image update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update your profile image right now.",
+    });
+  }
+});
+
+router.delete("/profile-image", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const updatedAdmin = await removeAdminProfileImage(admin.id);
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Profile image removed.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    console.error("Admin profile image removal failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not remove your profile image right now.",
     });
   }
 });
