@@ -10,6 +10,8 @@ import adminRoutes from "./routes/admin.js";
 import deliveryRequestRoutes from "./routes/deliveryRequest.js";
 import requestInformationRoutes from "./routes/requestInformation.js";
 import { initializeAdminCollection } from "./services/adminService.js";
+import { initializeDeliveryRequestCollection } from "./services/deliveryRequestService.js";
+import { initializeRequestInformationCollection } from "./services/requestInformationService.js";
 
 dotenv.config();
 
@@ -81,6 +83,8 @@ const startServer = async () => {
   try {
     await connectToDatabase();
     await initializeAdminCollection();
+    await initializeDeliveryRequestCollection();
+    await initializeRequestInformationCollection();
 
     app.listen(port, host, () => {
       console.log(`Efficient Global backend listening at http://${host}:${port}`);

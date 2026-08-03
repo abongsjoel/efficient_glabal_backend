@@ -1,5 +1,10 @@
 import { Router } from "express";
 import { sendDeliveryRequestEmail } from "../services/deliveryRequestEmail.js";
+import {
+  markDeliveryRequestEmailFailed,
+  markDeliveryRequestEmailSent,
+  recordDeliveryRequest,
+} from "../services/deliveryRequestService.js";
 
 const router = Router();
 
@@ -103,18 +108,61 @@ router.post("/", async (req, res) => {
     instructions: getStringValue(req.body.instructions),
     submittedAt: new Date().toISOString(),
   };
+  let deliveryRequest;
 
   try {
-    const email = await sendDeliveryRequestEmail(submission);
+    deliveryRequest = await recordDeliveryRequest(submission);
 
-    console.info("Delivery request email sent", {
-      emailId: email?.id,
+    console.info("Delivery request saved", {
+      deliveryRequestId: deliveryRequest._id.toString(),
       source: submission.source,
       submittedAt: submission.submittedAt,
     });
   } catch (error) {
+    console.error("Delivery request database save failed", {
+      message: error.message,
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+
+    return res.status(500).json({
+      message:
+        "We could not save your delivery request right now. Please try again later.",
+    });
+  }
+
+  try {
+    const email = await sendDeliveryRequestEmail(submission);
+
+    try {
+      await markDeliveryRequestEmailSent(deliveryRequest._id, email?.id);
+    } catch (statusError) {
+      console.error("Delivery request email status update failed", {
+        message: statusError.message,
+        deliveryRequestId: deliveryRequest._id.toString(),
+        emailId: email?.id,
+      });
+    }
+
+    console.info("Delivery request email sent", {
+      emailId: email?.id,
+      deliveryRequestId: deliveryRequest._id.toString(),
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+  } catch (error) {
+    try {
+      await markDeliveryRequestEmailFailed(deliveryRequest._id, error);
+    } catch (statusError) {
+      console.error("Delivery request email failure status update failed", {
+        message: statusError.message,
+        deliveryRequestId: deliveryRequest._id.toString(),
+      });
+    }
+
     console.error("Delivery request email failed", {
       message: error.message,
+      deliveryRequestId: deliveryRequest._id.toString(),
       source: submission.source,
       submittedAt: submission.submittedAt,
     });
@@ -126,6 +174,7 @@ router.post("/", async (req, res) => {
   }
 
   return res.status(201).json({
+    deliveryRequestId: deliveryRequest._id.toString(),
     message: "Delivery request submission received.",
   });
 });
