@@ -1,5 +1,10 @@
 import { Router } from "express";
 import { sendRequestInformationEmail } from "../services/requestInformationEmail.js";
+import {
+  markRequestInformationEmailFailed,
+  markRequestInformationEmailSent,
+  recordRequestInformation,
+} from "../services/requestInformationService.js";
 
 const router = Router();
 
@@ -63,18 +68,64 @@ router.post("/", async (req, res) => {
     message: getStringValue(req.body.message),
     submittedAt: new Date().toISOString(),
   };
+  let requestInformation;
 
   try {
-    const email = await sendRequestInformationEmail(submission);
+    requestInformation = await recordRequestInformation(submission);
 
-    console.info("Request information email sent", {
-      emailId: email?.id,
+    console.info("Request information saved", {
+      requestInformationId: requestInformation._id.toString(),
       source: submission.source,
       submittedAt: submission.submittedAt,
     });
   } catch (error) {
+    console.error("Request information database save failed", {
+      message: error.message,
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+
+    return res.status(500).json({
+      message:
+        "We could not save your request right now. Please try again later.",
+    });
+  }
+
+  try {
+    const email = await sendRequestInformationEmail(submission);
+
+    try {
+      await markRequestInformationEmailSent(requestInformation._id, email?.id);
+    } catch (statusError) {
+      console.error("Request information email status update failed", {
+        message: statusError.message,
+        requestInformationId: requestInformation._id.toString(),
+        emailId: email?.id,
+      });
+    }
+
+    console.info("Request information email sent", {
+      emailId: email?.id,
+      requestInformationId: requestInformation._id.toString(),
+      source: submission.source,
+      submittedAt: submission.submittedAt,
+    });
+  } catch (error) {
+    try {
+      await markRequestInformationEmailFailed(requestInformation._id, error);
+    } catch (statusError) {
+      console.error(
+        "Request information email failure status update failed",
+        {
+          message: statusError.message,
+          requestInformationId: requestInformation._id.toString(),
+        },
+      );
+    }
+
     console.error("Request information email failed", {
       message: error.message,
+      requestInformationId: requestInformation._id.toString(),
       source: submission.source,
       submittedAt: submission.submittedAt,
     });
@@ -86,6 +137,7 @@ router.post("/", async (req, res) => {
   }
 
   return res.status(201).json({
+    requestInformationId: requestInformation._id.toString(),
     message: "Request information submission received.",
   });
 });
