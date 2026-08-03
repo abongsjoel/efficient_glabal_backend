@@ -9,6 +9,7 @@ import {
   updateAdminProfile,
   updateAdminProfileImage,
 } from "../services/adminService.js";
+import { getDeliveryRequestsForAdmin } from "../services/deliveryRequestService.js";
 
 const router = Router();
 
@@ -188,6 +189,32 @@ router.get("/me", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not verify your session right now.",
+    });
+  }
+});
+
+router.get("/delivery-requests", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const deliveryRequests = await getDeliveryRequestsForAdmin({
+      limit: req.query?.limit,
+    });
+
+    return res.json({ deliveryRequests });
+  } catch (error) {
+    console.error("Admin delivery request lookup failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not load delivery requests right now.",
     });
   }
 });

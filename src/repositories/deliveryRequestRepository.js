@@ -111,3 +111,10 @@ export const updateDeliveryRequestEmailNotification = (
 
   return getDeliveryRequestsCollection().updateOne({ _id: objectId }, update);
 };
+
+export const listDeliveryRequests = ({ limit }) =>
+  getDeliveryRequestsCollection()
+    .find({})
+    .sort({ submittedAt: -1 })
+    .limit(limit)
+    .toArray();
