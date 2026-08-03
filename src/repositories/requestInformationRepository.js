@@ -110,3 +110,10 @@ export const updateRequestInformationEmailNotification = (
     update,
   );
 };
+
+export const listRequestInformation = ({ limit }) =>
+  getRequestInformationCollection()
+    .find({})
+    .sort({ submittedAt: -1 })
+    .limit(limit)
+    .toArray();
