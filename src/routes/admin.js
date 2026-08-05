@@ -10,6 +10,7 @@ import {
   updateAdminProfileImage,
 } from "../services/adminService.js";
 import { getDeliveryRequestsForAdmin } from "../services/deliveryRequestService.js";
+import { getRequestInformationForAdmin } from "../services/requestInformationService.js";
 
 const router = Router();
 
@@ -215,6 +216,32 @@ router.get("/delivery-requests", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not load delivery requests right now.",
+    });
+  }
+});
+
+router.get("/information-requests", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const informationRequests = await getRequestInformationForAdmin({
+      limit: req.query?.limit,
+    });
+
+    return res.json({ informationRequests });
+  } catch (error) {
+    console.error("Admin information request lookup failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not load information requests right now.",
     });
   }
 });
