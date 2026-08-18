@@ -243,3 +243,7 @@ without changes. The username used at login is the part of the email before the 
 | Browser CORS error | Origin not listed in `CORS_ORIGIN` |
 | Admin login succeeds but `/me` returns `401` | Cookie not stored — cross-site setup needs `ADMIN_COOKIE_SAME_SITE=none` and HTTPS, and the frontend must send credentials |
 | `413` on profile image upload | Image exceeds `REQUEST_BODY_LIMIT`; images over 1 MB are rejected with `400` regardless |
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Joel Chi.
