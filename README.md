@@ -116,6 +116,7 @@ expired.
 | `GET` | `/api/admin/me` | Current admin for the session |
 | `GET` | `/api/admin/delivery-requests` | Delivery requests, newest first |
 | `GET` | `/api/admin/information-requests` | Information requests, newest first |
+| `POST` | `/api/admin/admins` | Add an admin (`super_admin` only) |
 | `PATCH` | `/api/admin/profile` | Update display name |
 | `PATCH` | `/api/admin/password` | Change password |
 | `PATCH` | `/api/admin/profile-image` | Set profile image (base64 data URL) |
@@ -135,6 +136,11 @@ Password changes require `currentPassword`, `newPassword`, and `confirmPassword`
 passwords must be 8–72 characters and contain a lowercase letter, uppercase letter,
 number, and special character, and must differ from the current password.
 
+Adding an admin requires `name`, `email`, `password`, `confirmPassword`, `role`, and
+`status`. The password follows the same rules as a password change. It returns
+`201` with the new admin, `400` with field `errors` (including a duplicate email),
+or `403` when the caller is not a `super_admin`.
+
 Profile images must be a `data:image/png|jpeg|webp;base64,...` URL of 1 MB or less.
 They are stored inline on the admin document, so keep `REQUEST_BODY_LIMIT` above the
 image limit.
@@ -152,8 +158,9 @@ Session tokens are 32 random bytes, base64url-encoded, and only the hash is stor
 a database dump cannot be replayed as a login.
 
 Admin roles are `super_admin`, `manager`, `dispatcher`, `viewer`; statuses are
-`active` and `inactive`. Only `active` admins can authenticate. Roles are stored but
-not yet enforced per endpoint — any active admin can call every admin route.
+`active` and `inactive`. Only `active` admins can authenticate. Roles are only
+enforced on `POST /api/admin/admins` (`super_admin`); any active admin can call every
+other admin route.
 
 ## Environment
 

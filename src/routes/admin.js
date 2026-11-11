@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { adminRoles } from "../constants/admin.js";
 import {
+  addAdminAccount,
   authenticateAdmin,
   createSessionForAdmin,
   deleteAdminSession,
@@ -242,6 +244,53 @@ router.get("/information-requests", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not load information requests right now.",
+    });
+  }
+});
+
+router.post("/admins", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    if (admin.role !== adminRoles.SUPER_ADMIN) {
+      return res.status(403).json({
+        message: "Only super admins can add admins.",
+      });
+    }
+
+    const createdAdmin = await addAdminAccount({
+      name: getStringValue(req.body?.name),
+      email: getStringValue(req.body?.email),
+      password: getRawStringValue(req.body?.password),
+      confirmPassword: getRawStringValue(req.body?.confirmPassword),
+      role: getStringValue(req.body?.role),
+      status: getStringValue(req.body?.status),
+    });
+
+    return res.status(201).json({
+      message: "Admin added.",
+      admin: createdAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_NEW_ADMIN") {
+      return res.status(400).json({
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+
+    console.error("Admin creation failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not add this admin right now.",
     });
   }
 });
