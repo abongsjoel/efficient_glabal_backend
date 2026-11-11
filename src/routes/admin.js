@@ -6,6 +6,7 @@ import {
   createSessionForAdmin,
   deleteAdminSession,
   getAdminFromSessionToken,
+  getAdminsForAdmin,
   removeAdminProfileImage,
   updateAdminPassword,
   updateAdminProfile,
@@ -244,6 +245,30 @@ router.get("/information-requests", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not load information requests right now.",
+    });
+  }
+});
+
+router.get("/admins", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    const admins = await getAdminsForAdmin();
+
+    return res.json({ admins });
+  } catch (error) {
+    console.error("Admin list lookup failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not load admins right now.",
     });
   }
 });

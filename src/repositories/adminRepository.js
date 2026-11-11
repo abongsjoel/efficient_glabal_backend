@@ -91,6 +91,14 @@ export const findAdminById = (id) => {
   return getAdminsCollection().findOne({ _id: objectId });
 };
 
+// Leaves out passwordHash and the (potentially large) base64 profileImage so the
+// list stays safe and small.
+export const listAdmins = () =>
+  getAdminsCollection()
+    .find({}, { projection: { passwordHash: 0, profileImage: 0 } })
+    .sort({ createdAt: -1 })
+    .toArray();
+
 export const updateAdminName = (id, name) => {
   const objectId = toObjectId(id);
 

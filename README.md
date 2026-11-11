@@ -116,6 +116,7 @@ expired.
 | `GET` | `/api/admin/me` | Current admin for the session |
 | `GET` | `/api/admin/delivery-requests` | Delivery requests, newest first |
 | `GET` | `/api/admin/information-requests` | Information requests, newest first |
+| `GET` | `/api/admin/admins` | All admins, newest first (no password hashes or profile images) |
 | `POST` | `/api/admin/admins` | Add an admin (`super_admin` only) |
 | `PATCH` | `/api/admin/profile` | Update display name |
 | `PATCH` | `/api/admin/password` | Change password |

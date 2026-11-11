@@ -15,6 +15,7 @@ import {
   findAdminByEmail,
   findAdminByIdentifier,
   findAdminById,
+  listAdmins,
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
   updateAdminName as updateAdminNameById,
@@ -85,6 +86,23 @@ export const toSafeAdmin = (admin) => ({
   status: admin.status,
   profileImage: admin.profileImage || "",
 });
+
+const toIsoString = (value) =>
+  value instanceof Date ? value.toISOString() : "";
+
+export const getAdminsForAdmin = async () => {
+  const admins = await listAdmins();
+
+  return admins.map((admin) => ({
+    id: admin._id.toString(),
+    name: admin.name,
+    email: admin.email,
+    role: admin.role,
+    status: admin.status,
+    createdAt: toIsoString(admin.createdAt),
+    updatedAt: toIsoString(admin.updatedAt),
+  }));
+};
 
 const normalizeAdminName = (name) =>
   typeof name === "string" ? name.trim().replace(/\s+/g, " ") : "";
