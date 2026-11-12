@@ -3,6 +3,7 @@ import { adminRoles } from "../constants/admin.js";
 import {
   addAdminAccount,
   authenticateAdmin,
+  checkAdminEmailAvailability,
   createSessionForAdmin,
   deleteAdminSession,
   getAdminFromSessionToken,
@@ -269,6 +270,48 @@ router.get("/admins", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not load admins right now.",
+    });
+  }
+});
+
+// Same access as adding an admin, since only the add-admin form uses it.
+router.get("/admins/email-availability", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    if (admin.role !== adminRoles.SUPER_ADMIN) {
+      return res.status(403).json({
+        message: "Only super admins can add admins.",
+      });
+    }
+
+    const availability = await checkAdminEmailAvailability(
+      getStringValue(req.query?.email),
+    );
+
+    if (!availability) {
+      return res.status(400).json({
+        message: "Enter a valid email address.",
+        errors: {
+          email: "Enter a valid email address.",
+        },
+      });
+    }
+
+    return res.json(availability);
+  } catch (error) {
+    console.error("Admin email availability check failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not check this email right now.",
     });
   }
 });

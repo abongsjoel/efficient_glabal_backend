@@ -551,3 +551,20 @@ export const addAdminAccount = async ({
     throw error;
   }
 };
+
+// Lets the add-admin form flag a taken email before submit. Returns null when
+// the email isn't valid, so the route can reject it instead of looking it up.
+export const checkAdminEmailAvailability = async (email) => {
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
+
+  if (!adminEmailPattern.test(normalizedEmail)) {
+    return null;
+  }
+
+  const existingAdmin = await findAdminByEmail(normalizedEmail);
+
+  return {
+    available: !existingAdmin,
+    message: existingAdmin ? duplicateAdminEmailMessage : "",
+  };
+};
