@@ -18,6 +18,9 @@ import { getRequestInformationForAdmin } from "../services/requestInformationSer
 
 const router = Router();
 
+// Who can see the admin list. Adding admins stays limited to super admins.
+const adminListRoles = [adminRoles.SUPER_ADMIN, adminRoles.MANAGER];
+
 const getAdminSessionCookieName = () =>
   process.env.ADMIN_SESSION_COOKIE_NAME || "efficient_global_admin_session";
 
@@ -257,6 +260,12 @@ router.get("/admins", async (req, res) => {
     if (!admin) {
       return res.status(401).json({
         message: "Not authenticated.",
+      });
+    }
+
+    if (!adminListRoles.includes(admin.role)) {
+      return res.status(403).json({
+        message: "Only super admins and managers can view admins.",
       });
     }
 
