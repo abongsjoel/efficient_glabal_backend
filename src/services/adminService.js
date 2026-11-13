@@ -15,6 +15,7 @@ import {
   findAdminByEmail,
   findAdminByIdentifier,
   findAdminById,
+  listAdmins,
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
   updateAdminName as updateAdminNameById,
@@ -33,6 +34,7 @@ const profileImageDataUrlPattern =
   /^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/]+={0,2}$/i;
 const adminPasswordRequirementMessage =
   "Password must include a lowercase letter, uppercase letter, number, and special character.";
+const adminEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const validateAdminRole = (role) => adminRoleValues.includes(role);
 const validateAdminStatus = (status) => adminStatusValues.includes(status);
@@ -85,6 +87,23 @@ export const toSafeAdmin = (admin) => ({
   profileImage: admin.profileImage || "",
 });
 
+const toIsoString = (value) =>
+  value instanceof Date ? value.toISOString() : "";
+
+export const getAdminsForAdmin = async () => {
+  const admins = await listAdmins();
+
+  return admins.map((admin) => ({
+    id: admin._id.toString(),
+    name: admin.name,
+    email: admin.email,
+    role: admin.role,
+    status: admin.status,
+    createdAt: toIsoString(admin.createdAt),
+    updatedAt: toIsoString(admin.updatedAt),
+  }));
+};
+
 const normalizeAdminName = (name) =>
   typeof name === "string" ? name.trim().replace(/\s+/g, " ") : "";
 
@@ -113,19 +132,13 @@ export const validateAdminPasswordChange = ({
     errors.currentPassword = "Enter your current password.";
   }
 
-  if (!newPassword.trim()) {
-    errors.newPassword = "Enter a new password.";
-  } else if (newPassword.length < minAdminPasswordLength) {
-    errors.newPassword = `Password must be at least ${minAdminPasswordLength} characters.`;
-  } else if (newPassword.length > maxAdminPasswordLength) {
-    errors.newPassword = `Password must be ${maxAdminPasswordLength} characters or fewer.`;
-  } else if (
-    !/[a-z]/.test(newPassword) ||
-    !/[A-Z]/.test(newPassword) ||
-    !/[0-9]/.test(newPassword) ||
-    !/[^A-Za-z0-9\s]/.test(newPassword)
-  ) {
-    errors.newPassword = adminPasswordRequirementMessage;
+  const newPasswordError = getAdminPasswordError(
+    newPassword,
+    "Enter a new password.",
+  );
+
+  if (newPasswordError) {
+    errors.newPassword = newPasswordError;
   }
 
   if (!confirmPassword.trim()) {
@@ -136,6 +149,93 @@ export const validateAdminPasswordChange = ({
 
   return errors;
 };
+
+// Returns an empty string when the password meets every rule.
+const getAdminPasswordError = (password, emptyMessage) => {
+  if (!password.trim()) {
+    return emptyMessage;
+  }
+
+  if (password.length < minAdminPasswordLength) {
+    return `Password must be at least ${minAdminPasswordLength} characters.`;
+  }
+
+  if (password.length > maxAdminPasswordLength) {
+    return `Password must be ${maxAdminPasswordLength} characters or fewer.`;
+  }
+
+  if (
+    !/[a-z]/.test(password) ||
+    !/[A-Z]/.test(password) ||
+    !/[0-9]/.test(password) ||
+    !/[^A-Za-z0-9\s]/.test(password)
+  ) {
+    return adminPasswordRequirementMessage;
+  }
+
+  return "";
+};
+
+export const validateNewAdminAccount = ({
+  name = "",
+  email = "",
+  password = "",
+  confirmPassword = "",
+  role = "",
+  status = "",
+} = {}) => {
+  const errors = {};
+  const normalizedName = normalizeAdminName(name);
+  const normalizedEmail = email.trim();
+
+  if (!normalizedName) {
+    errors.name = "Enter the admin's name.";
+  } else if (normalizedName.length > maxAdminNameLength) {
+    errors.name = `Name must be ${maxAdminNameLength} characters or fewer.`;
+  }
+
+  if (!normalizedEmail) {
+    errors.email = "Enter the admin's email.";
+  } else if (!adminEmailPattern.test(normalizedEmail)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (!validateAdminRole(role)) {
+    errors.role = "Choose a valid role.";
+  }
+
+  if (!validateAdminStatus(status)) {
+    errors.status = "Choose a valid status.";
+  }
+
+  const passwordError = getAdminPasswordError(password, "Enter a password.");
+
+  if (passwordError) {
+    errors.password = passwordError;
+  }
+
+  if (!confirmPassword.trim()) {
+    errors.confirmPassword = "Confirm the password.";
+  } else if (password && confirmPassword !== password) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return errors;
+};
+
+const createNewAdminAccountError = (
+  errors,
+  message = "Please correct the highlighted fields.",
+) => {
+  const error = new Error(message);
+  error.code = "INVALID_NEW_ADMIN";
+  error.errors = errors;
+  return error;
+};
+
+const duplicateAdminEmailMessage = "An admin with this email already exists.";
+
+const isDuplicateKeyError = (error) => error?.code === 11000;
 
 const createAdminPasswordError = (
   errors,
@@ -392,4 +492,79 @@ export const createAdminAccount = async ({
     role,
     status,
   });
+};
+
+// Used by the admin dashboard. Unlike createAdminAccount (used by the seed
+// script), this returns field-level errors the form can show.
+export const addAdminAccount = async ({
+  name,
+  email,
+  password,
+  confirmPassword,
+  role,
+  status,
+}) => {
+  const errors = validateNewAdminAccount({
+    name,
+    email,
+    password,
+    confirmPassword,
+    role,
+    status,
+  });
+
+  if (Object.keys(errors).length > 0) {
+    throw createNewAdminAccountError(errors);
+  }
+
+  const existingAdmin = await findAdminByEmail(email);
+
+  if (existingAdmin) {
+    throw createNewAdminAccountError(
+      { email: duplicateAdminEmailMessage },
+      duplicateAdminEmailMessage,
+    );
+  }
+
+  const passwordHash = await hashAdminPassword(password);
+
+  try {
+    const admin = await createAdmin({
+      name: normalizeAdminName(name),
+      email,
+      passwordHash,
+      role,
+      status,
+    });
+
+    return toSafeAdmin(admin);
+  } catch (error) {
+    // Two requests for the same email can both pass the lookup above; the
+    // unique email index rejects the second one.
+    if (isDuplicateKeyError(error)) {
+      throw createNewAdminAccountError(
+        { email: duplicateAdminEmailMessage },
+        duplicateAdminEmailMessage,
+      );
+    }
+
+    throw error;
+  }
+};
+
+// Lets the add-admin form flag a taken email before submit. Returns null when
+// the email isn't valid, so the route can reject it instead of looking it up.
+export const checkAdminEmailAvailability = async (email) => {
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
+
+  if (!adminEmailPattern.test(normalizedEmail)) {
+    return null;
+  }
+
+  const existingAdmin = await findAdminByEmail(normalizedEmail);
+
+  return {
+    available: !existingAdmin,
+    message: existingAdmin ? duplicateAdminEmailMessage : "",
+  };
 };
