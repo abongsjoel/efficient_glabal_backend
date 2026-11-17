@@ -170,6 +170,12 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (error) {
+    if (error.code === "ADMIN_INACTIVE") {
+      return res.status(403).json({
+        message: error.message,
+      });
+    }
+
     console.error("Admin login failed", {
       message: error.message,
     });

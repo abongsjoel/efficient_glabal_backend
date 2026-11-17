@@ -295,16 +295,26 @@ export const authenticateAdmin = async ({ identifier, password }) => {
     return null;
   }
 
-  if (admin.status !== adminStatuses.ACTIVE) {
-    return null;
-  }
-
   const isPasswordValid = await verifyAdminPassword(
     password,
     admin.passwordHash,
   );
 
-  return isPasswordValid ? toSafeAdmin(admin) : null;
+  if (!isPasswordValid) {
+    return null;
+  }
+
+  // Only reported once the password matches, so a wrong guess can't reveal
+  // whether an email belongs to a deactivated admin.
+  if (admin.status !== adminStatuses.ACTIVE) {
+    const error = new Error(
+      "Your account has been deactivated. Please contact an administrator to restore access.",
+    );
+    error.code = "ADMIN_INACTIVE";
+    throw error;
+  }
+
+  return toSafeAdmin(admin);
 };
 
 export const createSessionForAdmin = async (
