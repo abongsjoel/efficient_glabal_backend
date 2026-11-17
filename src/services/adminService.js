@@ -5,6 +5,7 @@ import {
   adminRoles,
   adminStatusValues,
   adminStatuses,
+  canManageAdminStatus,
 } from "../constants/admin.js";
 import {
   createAdmin,
@@ -457,22 +458,35 @@ export const updateAdminProfileImage = async ({ adminId, profileImage }) => {
   return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
 };
 
-const createAdminStatusError = (message) => {
+const createAdminStatusError = (message, code = "INVALID_ADMIN_STATUS") => {
   const error = new Error(message);
-  error.code = "INVALID_ADMIN_STATUS";
+  error.code = code;
   return error;
 };
 
 // Admins can't change their own status, so nobody locks themselves out. That
 // also keeps at least one super admin active: only super admins can deactivate
-// anyone, and the last one would have to deactivate themselves.
-export const setAdminStatus = async ({ actingAdminId, adminId, status }) => {
+// a super admin, and the last one would have to deactivate themselves.
+export const setAdminStatus = async ({ actingAdmin, adminId, status }) => {
   if (!validateAdminStatus(status)) {
     throw createAdminStatusError("Choose a valid status.");
   }
 
-  if (adminId === actingAdminId) {
+  if (adminId === actingAdmin.id) {
     throw createAdminStatusError("You can't change your own status.");
+  }
+
+  const targetAdmin = await findAdminById(adminId);
+
+  if (!targetAdmin) {
+    return null;
+  }
+
+  if (!canManageAdminStatus(actingAdmin.role, targetAdmin.role)) {
+    throw createAdminStatusError(
+      "You don't have permission to change this admin's status.",
+      "ADMIN_STATUS_FORBIDDEN",
+    );
   }
 
   const updatedAdmin = await updateAdminStatusById(adminId, status);

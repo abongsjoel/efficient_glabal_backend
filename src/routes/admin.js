@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { adminRoles } from "../constants/admin.js";
+import {
+  adminRoles,
+  adminStatusManageableRoles,
+} from "../constants/admin.js";
 import {
   addAdminAccount,
   authenticateAdmin,
@@ -389,14 +392,16 @@ router.patch("/admins/:id/status", async (req, res) => {
       });
     }
 
-    if (admin.role !== adminRoles.SUPER_ADMIN) {
+    // Which admins they may change is checked against the target's role.
+    if (!adminStatusManageableRoles[admin.role]) {
       return res.status(403).json({
-        message: "Only super admins can activate or deactivate admins.",
+        message:
+          "Only super admins and managers can activate or deactivate admins.",
       });
     }
 
     const updatedAdmin = await setAdminStatus({
-      actingAdminId: admin.id,
+      actingAdmin: admin,
       adminId: req.params.id,
       status: getStringValue(req.body?.status),
     });
@@ -414,6 +419,12 @@ router.patch("/admins/:id/status", async (req, res) => {
   } catch (error) {
     if (error.code === "INVALID_ADMIN_STATUS") {
       return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    if (error.code === "ADMIN_STATUS_FORBIDDEN") {
+      return res.status(403).json({
         message: error.message,
       });
     }

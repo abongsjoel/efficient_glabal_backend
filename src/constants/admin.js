@@ -13,3 +13,16 @@ export const adminStatuses = Object.freeze({
 });
 
 export const adminStatusValues = Object.freeze(Object.values(adminStatuses));
+
+// Which roles each role may activate or deactivate. Roles left out can't change
+// anyone's status. Mirrored in the frontend's constants/admin.ts.
+export const adminStatusManageableRoles = Object.freeze({
+  [adminRoles.SUPER_ADMIN]: adminRoleValues,
+  [adminRoles.MANAGER]: Object.freeze([
+    adminRoles.DISPATCHER,
+    adminRoles.VIEWER,
+  ]),
+});
+
+export const canManageAdminStatus = (actingRole, targetRole) =>
+  adminStatusManageableRoles[actingRole]?.includes(targetRole) ?? false;
