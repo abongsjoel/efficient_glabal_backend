@@ -10,6 +10,7 @@ import {
   createAdmin,
   createAdminSession,
   deleteAdminSessionByTokenHash,
+  deleteAdminSessionsByAdminId,
   ensureAdminIndexes,
   findActiveAdminSessionByTokenHash,
   findAdminByEmail,
@@ -21,6 +22,7 @@ import {
   updateAdminName as updateAdminNameById,
   updateAdminPassword as updateAdminPasswordById,
   updateAdminProfileImage as updateAdminProfileImageById,
+  updateAdminStatus as updateAdminStatusById,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
@@ -90,18 +92,20 @@ export const toSafeAdmin = (admin) => ({
 const toIsoString = (value) =>
   value instanceof Date ? value.toISOString() : "";
 
+const toAdminListItem = (admin) => ({
+  id: admin._id.toString(),
+  name: admin.name,
+  email: admin.email,
+  role: admin.role,
+  status: admin.status,
+  createdAt: toIsoString(admin.createdAt),
+  updatedAt: toIsoString(admin.updatedAt),
+});
+
 export const getAdminsForAdmin = async () => {
   const admins = await listAdmins();
 
-  return admins.map((admin) => ({
-    id: admin._id.toString(),
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-    status: admin.status,
-    createdAt: toIsoString(admin.createdAt),
-    updatedAt: toIsoString(admin.updatedAt),
-  }));
+  return admins.map(toAdminListItem);
 };
 
 const normalizeAdminName = (name) =>
@@ -441,6 +445,40 @@ export const updateAdminProfileImage = async ({ adminId, profileImage }) => {
   const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
 
   return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
+};
+
+const createAdminStatusError = (message) => {
+  const error = new Error(message);
+  error.code = "INVALID_ADMIN_STATUS";
+  return error;
+};
+
+// Admins can't change their own status, so nobody locks themselves out. That
+// also keeps at least one super admin active: only super admins can deactivate
+// anyone, and the last one would have to deactivate themselves.
+export const setAdminStatus = async ({ actingAdminId, adminId, status }) => {
+  if (!validateAdminStatus(status)) {
+    throw createAdminStatusError("Choose a valid status.");
+  }
+
+  if (adminId === actingAdminId) {
+    throw createAdminStatusError("You can't change your own status.");
+  }
+
+  const updatedAdmin = await updateAdminStatusById(adminId, status);
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  if (!updatedAdminDocument) {
+    return null;
+  }
+
+  // Sessions already stop working while an admin is inactive. Deleting them
+  // means reactivating the admin doesn't bring their old logins back.
+  if (status === adminStatuses.INACTIVE) {
+    await deleteAdminSessionsByAdminId(adminId);
+  }
+
+  return toAdminListItem(updatedAdminDocument);
 };
 
 export const removeAdminProfileImage = async (adminId) => {

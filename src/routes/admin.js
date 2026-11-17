@@ -9,6 +9,7 @@ import {
   getAdminFromSessionToken,
   getAdminsForAdmin,
   removeAdminProfileImage,
+  setAdminStatus,
   updateAdminPassword,
   updateAdminProfile,
   updateAdminProfileImage,
@@ -368,6 +369,55 @@ router.post("/admins", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not add this admin right now.",
+    });
+  }
+});
+
+router.patch("/admins/:id/status", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    if (admin.role !== adminRoles.SUPER_ADMIN) {
+      return res.status(403).json({
+        message: "Only super admins can activate or deactivate admins.",
+      });
+    }
+
+    const updatedAdmin = await setAdminStatus({
+      actingAdminId: admin.id,
+      adminId: req.params.id,
+      status: getStringValue(req.body?.status),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Admin status updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_STATUS") {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    console.error("Admin status update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update this admin's status right now.",
     });
   }
 });

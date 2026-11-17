@@ -156,6 +156,30 @@ export const updateAdminProfileImage = (id, profileImage) => {
   );
 };
 
+// Same projection as listAdmins, since the result goes straight back to the
+// admin list.
+export const updateAdminStatus = (id, status) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $set: {
+        status,
+        updatedAt: new Date(),
+      },
+    },
+    {
+      projection: { passwordHash: 0, profileImage: 0 },
+      returnDocument: "after",
+    },
+  );
+};
+
 export const removeAdminProfileImage = (id) => {
   const objectId = toObjectId(id);
 
@@ -241,3 +265,13 @@ export const touchAdminSession = (sessionId) =>
 
 export const deleteAdminSessionByTokenHash = (tokenHash) =>
   getAdminSessionsCollection().deleteOne({ tokenHash });
+
+export const deleteAdminSessionsByAdminId = (adminId) => {
+  const objectId = toObjectId(adminId);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminSessionsCollection().deleteMany({ adminId: objectId });
+};
