@@ -429,6 +429,12 @@ router.patch("/admins/:id/status", async (req, res) => {
       });
     }
 
+    if (error.code === "ADMIN_STATUS_UNCHANGED") {
+      return res.status(409).json({
+        message: error.message,
+      });
+    }
+
     console.error("Admin status update failed", {
       message: error.message,
     });

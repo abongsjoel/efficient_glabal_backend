@@ -156,21 +156,30 @@ export const updateAdminProfileImage = (id, profileImage) => {
   );
 };
 
-// Same projection as listAdmins, since the result goes straight back to the
-// admin list.
-export const updateAdminStatus = (id, status) => {
+// Only matches while the status still differs, so when two admins make the same
+// change at once just one update applies, and the other gets null back. Records
+// who made the change so that admin can be named. Same projection as
+// listAdmins, since the result goes straight back to the admin list.
+export const updateAdminStatus = (id, status, changedBy) => {
   const objectId = toObjectId(id);
 
   if (!objectId) {
     return null;
   }
 
+  const now = new Date();
+
   return getAdminsCollection().findOneAndUpdate(
-    { _id: objectId },
+    { _id: objectId, status: { $ne: status } },
     {
       $set: {
         status,
-        updatedAt: new Date(),
+        statusUpdatedAt: now,
+        statusUpdatedBy: {
+          id: toObjectId(changedBy.id),
+          name: changedBy.name,
+        },
+        updatedAt: now,
       },
     },
     {

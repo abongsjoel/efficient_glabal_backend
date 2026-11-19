@@ -464,6 +464,24 @@ const createAdminStatusError = (message, code = "INVALID_ADMIN_STATUS") => {
   return error;
 };
 
+// Explains that the requested status is already in place, naming who set it.
+// Admins created with a status, or changed before changes were recorded, have
+// no `statusUpdatedBy`.
+const createAdminStatusUnchangedError = (admin, status, actingAdminId) => {
+  const changeLabel =
+    status === adminStatuses.ACTIVE ? "activated" : "deactivated";
+  const changedBy = admin.statusUpdatedBy;
+  let message = `${admin.name} is already ${status}.`;
+
+  if (changedBy?.id?.toString() === actingAdminId) {
+    message = `You already ${changeLabel} ${admin.name}.`;
+  } else if (changedBy?.name) {
+    message = `${admin.name} was already ${changeLabel} by ${changedBy.name}.`;
+  }
+
+  return createAdminStatusError(message, "ADMIN_STATUS_UNCHANGED");
+};
+
 // Admins can't change their own status, so nobody locks themselves out. That
 // also keeps at least one super admin active: only super admins can deactivate
 // a super admin, and the last one would have to deactivate themselves.
@@ -489,11 +507,27 @@ export const setAdminStatus = async ({ actingAdmin, adminId, status }) => {
     );
   }
 
-  const updatedAdmin = await updateAdminStatusById(adminId, status);
+  // Usually the acting admin's list was just out of date.
+  if (targetAdmin.status === status) {
+    throw createAdminStatusUnchangedError(targetAdmin, status, actingAdmin.id);
+  }
+
+  const updatedAdmin = await updateAdminStatusById(
+    adminId,
+    status,
+    actingAdmin,
+  );
   const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
 
   if (!updatedAdminDocument) {
-    return null;
+    // Someone else made the same change between the lookup and the update.
+    const currentAdmin = await findAdminById(adminId);
+
+    if (!currentAdmin) {
+      return null;
+    }
+
+    throw createAdminStatusUnchangedError(currentAdmin, status, actingAdmin.id);
   }
 
   // Sessions already stop working while an admin is inactive. Deleting them
