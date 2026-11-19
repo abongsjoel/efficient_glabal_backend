@@ -20,6 +20,7 @@ import {
   listAdmins,
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
+  updateAdminDetails as updateAdminDetailsById,
   updateAdminName as updateAdminNameById,
   updateAdminPassword as updateAdminPasswordById,
   updateAdminProfileImage as updateAdminProfileImageById,
@@ -181,14 +182,8 @@ const getAdminPasswordError = (password, emptyMessage) => {
   return "";
 };
 
-export const validateNewAdminAccount = ({
-  name = "",
-  email = "",
-  password = "",
-  confirmPassword = "",
-  role = "",
-  status = "",
-} = {}) => {
+// The fields shared by adding and editing an admin.
+const validateAdminDetails = ({ name = "", email = "", role = "" } = {}) => {
   const errors = {};
   const normalizedName = normalizeAdminName(name);
   const normalizedEmail = email.trim();
@@ -208,6 +203,19 @@ export const validateNewAdminAccount = ({
   if (!validateAdminRole(role)) {
     errors.role = "Choose a valid role.";
   }
+
+  return errors;
+};
+
+export const validateNewAdminAccount = ({
+  name = "",
+  email = "",
+  password = "",
+  confirmPassword = "",
+  role = "",
+  status = "",
+} = {}) => {
+  const errors = validateAdminDetails({ name, email, role });
 
   if (!validateAdminStatus(status)) {
     errors.status = "Choose a valid status.";
@@ -639,6 +647,74 @@ export const addAdminAccount = async ({
     // unique email index rejects the second one.
     if (isDuplicateKeyError(error)) {
       throw createNewAdminAccountError(
+        { email: duplicateAdminEmailMessage },
+        duplicateAdminEmailMessage,
+      );
+    }
+
+    throw error;
+  }
+};
+
+const createAdminDetailsError = (
+  errors,
+  message = "Please correct the highlighted fields.",
+) => {
+  const error = new Error(message);
+  error.code = "INVALID_ADMIN_DETAILS";
+  error.errors = errors;
+  return error;
+};
+
+// Used by the edit-admin form, which only super admins can reach (checked in
+// the route). Nobody can change their own role, so there's always at least one
+// super admin left.
+export const editAdminAccount = async ({
+  actingAdmin,
+  adminId,
+  name,
+  email,
+  role,
+}) => {
+  const errors = validateAdminDetails({ name, email, role });
+
+  if (Object.keys(errors).length > 0) {
+    throw createAdminDetailsError(errors);
+  }
+
+  const targetAdmin = await findAdminById(adminId);
+
+  if (!targetAdmin) {
+    return null;
+  }
+
+  if (adminId === actingAdmin.id && role !== targetAdmin.role) {
+    throw createAdminDetailsError({ role: "You can't change your own role." });
+  }
+
+  const adminWithEmail = await findAdminByEmail(email);
+
+  if (adminWithEmail && adminWithEmail._id.toString() !== adminId) {
+    throw createAdminDetailsError(
+      { email: duplicateAdminEmailMessage },
+      duplicateAdminEmailMessage,
+    );
+  }
+
+  try {
+    const updatedAdmin = await updateAdminDetailsById(adminId, {
+      name: normalizeAdminName(name),
+      email,
+      role,
+    });
+    const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+    return updatedAdminDocument ? toAdminListItem(updatedAdminDocument) : null;
+  } catch (error) {
+    // Another admin can take the email between the lookup above and the
+    // update; the unique email index rejects it.
+    if (isDuplicateKeyError(error)) {
+      throw createAdminDetailsError(
         { email: duplicateAdminEmailMessage },
         duplicateAdminEmailMessage,
       );

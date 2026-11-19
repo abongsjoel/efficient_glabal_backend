@@ -9,6 +9,7 @@ import {
   checkAdminEmailAvailability,
   createSessionForAdmin,
   deleteAdminSession,
+  editAdminAccount,
   getAdminFromSessionToken,
   getAdminsForAdmin,
   removeAdminProfileImage,
@@ -293,7 +294,7 @@ router.get("/admins", async (req, res) => {
   }
 });
 
-// Same access as adding an admin, since only the add-admin form uses it.
+// Same access as adding and editing admins, since only those forms use it.
 router.get("/admins/email-availability", async (req, res) => {
   try {
     const admin = await getAuthenticatedAdmin(req);
@@ -378,6 +379,58 @@ router.post("/admins", async (req, res) => {
 
     return res.status(500).json({
       message: "We could not add this admin right now.",
+    });
+  }
+});
+
+router.patch("/admins/:id", async (req, res) => {
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+
+    if (!admin) {
+      return res.status(401).json({
+        message: "Not authenticated.",
+      });
+    }
+
+    if (admin.role !== adminRoles.SUPER_ADMIN) {
+      return res.status(403).json({
+        message: "Only super admins can edit admins.",
+      });
+    }
+
+    const updatedAdmin = await editAdminAccount({
+      actingAdmin: admin,
+      adminId: req.params.id,
+      name: getStringValue(req.body?.name),
+      email: getStringValue(req.body?.email),
+      role: getStringValue(req.body?.role),
+    });
+
+    if (!updatedAdmin) {
+      return res.status(404).json({
+        message: "Admin account not found.",
+      });
+    }
+
+    return res.json({
+      message: "Admin updated.",
+      admin: updatedAdmin,
+    });
+  } catch (error) {
+    if (error.code === "INVALID_ADMIN_DETAILS") {
+      return res.status(400).json({
+        message: error.message,
+        errors: error.errors,
+      });
+    }
+
+    console.error("Admin update failed", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "We could not update this admin right now.",
     });
   }
 });
