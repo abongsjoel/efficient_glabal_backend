@@ -156,6 +156,65 @@ export const updateAdminProfileImage = (id, profileImage) => {
   );
 };
 
+// Same projection as listAdmins, since the result goes straight back to the
+// admin list.
+export const updateAdminDetails = (id, { name, email, role }) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId },
+    {
+      $set: {
+        name: name.trim(),
+        email: normalizeAdminEmail(email),
+        role,
+        updatedAt: new Date(),
+      },
+    },
+    {
+      projection: { passwordHash: 0, profileImage: 0 },
+      returnDocument: "after",
+    },
+  );
+};
+
+// Only matches while the status still differs, so when two admins make the same
+// change at once just one update applies, and the other gets null back. Records
+// who made the change so that admin can be named. Same projection as
+// listAdmins, since the result goes straight back to the admin list.
+export const updateAdminStatus = (id, status, changedBy) => {
+  const objectId = toObjectId(id);
+
+  if (!objectId) {
+    return null;
+  }
+
+  const now = new Date();
+
+  return getAdminsCollection().findOneAndUpdate(
+    { _id: objectId, status: { $ne: status } },
+    {
+      $set: {
+        status,
+        statusUpdatedAt: now,
+        statusUpdatedBy: {
+          id: toObjectId(changedBy.id),
+          name: changedBy.name,
+        },
+        updatedAt: now,
+      },
+    },
+    {
+      projection: { passwordHash: 0, profileImage: 0 },
+      returnDocument: "after",
+    },
+  );
+};
+
 export const removeAdminProfileImage = (id) => {
   const objectId = toObjectId(id);
 
@@ -241,3 +300,13 @@ export const touchAdminSession = (sessionId) =>
 
 export const deleteAdminSessionByTokenHash = (tokenHash) =>
   getAdminSessionsCollection().deleteOne({ tokenHash });
+
+export const deleteAdminSessionsByAdminId = (adminId) => {
+  const objectId = toObjectId(adminId);
+
+  if (!objectId) {
+    return null;
+  }
+
+  return getAdminSessionsCollection().deleteMany({ adminId: objectId });
+};

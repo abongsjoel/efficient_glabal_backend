@@ -5,11 +5,13 @@ import {
   adminRoles,
   adminStatusValues,
   adminStatuses,
+  canManageAdminStatus,
 } from "../constants/admin.js";
 import {
   createAdmin,
   createAdminSession,
   deleteAdminSessionByTokenHash,
+  deleteAdminSessionsByAdminId,
   ensureAdminIndexes,
   findActiveAdminSessionByTokenHash,
   findAdminByEmail,
@@ -18,9 +20,11 @@ import {
   listAdmins,
   removeAdminProfileImage as removeAdminProfileImageById,
   touchAdminSession,
+  updateAdminDetails as updateAdminDetailsById,
   updateAdminName as updateAdminNameById,
   updateAdminPassword as updateAdminPasswordById,
   updateAdminProfileImage as updateAdminProfileImageById,
+  updateAdminStatus as updateAdminStatusById,
 } from "../repositories/adminRepository.js";
 
 const passwordSaltRounds = 12;
@@ -90,18 +94,20 @@ export const toSafeAdmin = (admin) => ({
 const toIsoString = (value) =>
   value instanceof Date ? value.toISOString() : "";
 
+const toAdminListItem = (admin) => ({
+  id: admin._id.toString(),
+  name: admin.name,
+  email: admin.email,
+  role: admin.role,
+  status: admin.status,
+  createdAt: toIsoString(admin.createdAt),
+  updatedAt: toIsoString(admin.updatedAt),
+});
+
 export const getAdminsForAdmin = async () => {
   const admins = await listAdmins();
 
-  return admins.map((admin) => ({
-    id: admin._id.toString(),
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-    status: admin.status,
-    createdAt: toIsoString(admin.createdAt),
-    updatedAt: toIsoString(admin.updatedAt),
-  }));
+  return admins.map(toAdminListItem);
 };
 
 const normalizeAdminName = (name) =>
@@ -176,14 +182,8 @@ const getAdminPasswordError = (password, emptyMessage) => {
   return "";
 };
 
-export const validateNewAdminAccount = ({
-  name = "",
-  email = "",
-  password = "",
-  confirmPassword = "",
-  role = "",
-  status = "",
-} = {}) => {
+// The fields shared by adding and editing an admin.
+const validateAdminDetails = ({ name = "", email = "", role = "" } = {}) => {
   const errors = {};
   const normalizedName = normalizeAdminName(name);
   const normalizedEmail = email.trim();
@@ -203,6 +203,19 @@ export const validateNewAdminAccount = ({
   if (!validateAdminRole(role)) {
     errors.role = "Choose a valid role.";
   }
+
+  return errors;
+};
+
+export const validateNewAdminAccount = ({
+  name = "",
+  email = "",
+  password = "",
+  confirmPassword = "",
+  role = "",
+  status = "",
+} = {}) => {
+  const errors = validateAdminDetails({ name, email, role });
 
   if (!validateAdminStatus(status)) {
     errors.status = "Choose a valid status.";
@@ -291,16 +304,26 @@ export const authenticateAdmin = async ({ identifier, password }) => {
     return null;
   }
 
-  if (admin.status !== adminStatuses.ACTIVE) {
-    return null;
-  }
-
   const isPasswordValid = await verifyAdminPassword(
     password,
     admin.passwordHash,
   );
 
-  return isPasswordValid ? toSafeAdmin(admin) : null;
+  if (!isPasswordValid) {
+    return null;
+  }
+
+  // Only reported once the password matches, so a wrong guess can't reveal
+  // whether an email belongs to a deactivated admin.
+  if (admin.status !== adminStatuses.ACTIVE) {
+    const error = new Error(
+      "Your account has been deactivated. Please contact an administrator to restore access.",
+    );
+    error.code = "ADMIN_INACTIVE";
+    throw error;
+  }
+
+  return toSafeAdmin(admin);
 };
 
 export const createSessionForAdmin = async (
@@ -443,6 +466,87 @@ export const updateAdminProfileImage = async ({ adminId, profileImage }) => {
   return updatedAdminDocument ? toSafeAdmin(updatedAdminDocument) : null;
 };
 
+const createAdminStatusError = (message, code = "INVALID_ADMIN_STATUS") => {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+};
+
+// Explains that the requested status is already in place, naming who set it.
+// Admins created with a status, or changed before changes were recorded, have
+// no `statusUpdatedBy`.
+const createAdminStatusUnchangedError = (admin, status, actingAdminId) => {
+  const changeLabel =
+    status === adminStatuses.ACTIVE ? "activated" : "deactivated";
+  const changedBy = admin.statusUpdatedBy;
+  let message = `${admin.name} is already ${status}.`;
+
+  if (changedBy?.id?.toString() === actingAdminId) {
+    message = `You already ${changeLabel} ${admin.name}.`;
+  } else if (changedBy?.name) {
+    message = `${admin.name} was already ${changeLabel} by ${changedBy.name}.`;
+  }
+
+  return createAdminStatusError(message, "ADMIN_STATUS_UNCHANGED");
+};
+
+// Admins can't change their own status, so nobody locks themselves out. That
+// also keeps at least one super admin active: only super admins can deactivate
+// a super admin, and the last one would have to deactivate themselves.
+export const setAdminStatus = async ({ actingAdmin, adminId, status }) => {
+  if (!validateAdminStatus(status)) {
+    throw createAdminStatusError("Choose a valid status.");
+  }
+
+  if (adminId === actingAdmin.id) {
+    throw createAdminStatusError("You can't change your own status.");
+  }
+
+  const targetAdmin = await findAdminById(adminId);
+
+  if (!targetAdmin) {
+    return null;
+  }
+
+  if (!canManageAdminStatus(actingAdmin.role, targetAdmin.role)) {
+    throw createAdminStatusError(
+      "You don't have permission to change this admin's status.",
+      "ADMIN_STATUS_FORBIDDEN",
+    );
+  }
+
+  // Usually the acting admin's list was just out of date.
+  if (targetAdmin.status === status) {
+    throw createAdminStatusUnchangedError(targetAdmin, status, actingAdmin.id);
+  }
+
+  const updatedAdmin = await updateAdminStatusById(
+    adminId,
+    status,
+    actingAdmin,
+  );
+  const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+  if (!updatedAdminDocument) {
+    // Someone else made the same change between the lookup and the update.
+    const currentAdmin = await findAdminById(adminId);
+
+    if (!currentAdmin) {
+      return null;
+    }
+
+    throw createAdminStatusUnchangedError(currentAdmin, status, actingAdmin.id);
+  }
+
+  // Sessions already stop working while an admin is inactive. Deleting them
+  // means reactivating the admin doesn't bring their old logins back.
+  if (status === adminStatuses.INACTIVE) {
+    await deleteAdminSessionsByAdminId(adminId);
+  }
+
+  return toAdminListItem(updatedAdminDocument);
+};
+
 export const removeAdminProfileImage = async (adminId) => {
   const updatedAdmin = await removeAdminProfileImageById(adminId);
   const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
@@ -543,6 +647,74 @@ export const addAdminAccount = async ({
     // unique email index rejects the second one.
     if (isDuplicateKeyError(error)) {
       throw createNewAdminAccountError(
+        { email: duplicateAdminEmailMessage },
+        duplicateAdminEmailMessage,
+      );
+    }
+
+    throw error;
+  }
+};
+
+const createAdminDetailsError = (
+  errors,
+  message = "Please correct the highlighted fields.",
+) => {
+  const error = new Error(message);
+  error.code = "INVALID_ADMIN_DETAILS";
+  error.errors = errors;
+  return error;
+};
+
+// Used by the edit-admin form, which only super admins can reach (checked in
+// the route). Nobody can change their own role, so there's always at least one
+// super admin left.
+export const editAdminAccount = async ({
+  actingAdmin,
+  adminId,
+  name,
+  email,
+  role,
+}) => {
+  const errors = validateAdminDetails({ name, email, role });
+
+  if (Object.keys(errors).length > 0) {
+    throw createAdminDetailsError(errors);
+  }
+
+  const targetAdmin = await findAdminById(adminId);
+
+  if (!targetAdmin) {
+    return null;
+  }
+
+  if (adminId === actingAdmin.id && role !== targetAdmin.role) {
+    throw createAdminDetailsError({ role: "You can't change your own role." });
+  }
+
+  const adminWithEmail = await findAdminByEmail(email);
+
+  if (adminWithEmail && adminWithEmail._id.toString() !== adminId) {
+    throw createAdminDetailsError(
+      { email: duplicateAdminEmailMessage },
+      duplicateAdminEmailMessage,
+    );
+  }
+
+  try {
+    const updatedAdmin = await updateAdminDetailsById(adminId, {
+      name: normalizeAdminName(name),
+      email,
+      role,
+    });
+    const updatedAdminDocument = getUpdatedAdminDocument(updatedAdmin);
+
+    return updatedAdminDocument ? toAdminListItem(updatedAdminDocument) : null;
+  } catch (error) {
+    // Another admin can take the email between the lookup above and the
+    // update; the unique email index rejects it.
+    if (isDuplicateKeyError(error)) {
+      throw createAdminDetailsError(
         { email: duplicateAdminEmailMessage },
         duplicateAdminEmailMessage,
       );
